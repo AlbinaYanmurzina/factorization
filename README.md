@@ -76,33 +76,3 @@ streamlit run Главная.py
 ```bash
 python -m pytest tests/ -v
 ```
-
-## API
-
-`POST /api/factorize`
-
-```json
-{
-  "number": "1234567891011",
-  "algorithm": "qs_mpqs"
-}
-```
-
-Ответ:
-
-```json
-{
-  "factors": ["239", "..."],
-  "time_ms": 42.5,
-  "steps": [...]
-}
-```
-
-## Зависимости
-
-- **FastAPI** + **Uvicorn** — REST API
-- **Streamlit** — интерактивный веб-интерфейс
-- **NumPy** — матричные операции (линейная алгебра над GF(2))
-- **SymPy** — генерация простых чисел, проверки
-- **gmpy2** — ускоренная длинная арифметика
-- **Plotly** / **Pandas** — графики бенчмарков

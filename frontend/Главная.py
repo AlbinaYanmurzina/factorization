@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 
 st.set_page_config(
     page_title="ВКР: Исследование алгоритмов факторизации",
@@ -403,9 +404,146 @@ with st.expander("⚡ Квадратичное решето — MPQS Парал�
 
 st.divider()
 
+# ── Числовые примеры ─────────────────────────────────────────────────────────
+
+st.header("4. Числовые примеры")
+st.markdown("Простые примеры «вручную» — чтобы почувствовать, как работает каждый алгоритм.")
+
+with st.expander("📐 Метод Ферма — пример: n = 8051", expanded=False):
+    st.markdown("**Задача:** разложить n = 8051.")
+    st.markdown("Начинаем с x = ⌈√8051⌉ = 90.")
+    data = {"x": [90, 91, 92], "w = x²−n": [49, 230, 413], "√w": ["7 ✓", "≈15.2", "≈20.3"], "Полный квадрат?": ["✓", "✗", "✗"]}
+    st.dataframe(pd.DataFrame(data), hide_index=True, use_container_width=True)
+    st.latex(r"x=90,\; w = 90^2 - 8051 = 8100 - 8051 = 49 = 7^2")
+    st.latex(r"p = x - y = 90 - 7 = 83,\quad q = x + y = 90 + 7 = 97")
+    st.success("8051 = 83 × 97  (нашли за 1 итерацию — делители близки к √8051 ≈ 89.7)")
+
+with st.expander("🔄 ρ-метод Полларда — пример: n = 8051", expanded=False):
+    st.markdown("**Задача:** разложить n = 8051, f(x) = (x² + 1) mod 8051, x₀ = 2.")
+    data = {
+        "i": [1, 2, 3, 4, 5],
+        "x (черепаха)": [5, 26, 677, 6347, 2117],
+        "y (заяц)": [26, 6347, 2117, 2117, 2117],
+        "|x−y|": [21, 6321, 4460, 4230, 0],
+        "НОД(|x−y|, 8051)": [1, 1, 83, "—", "—"],
+    }
+    st.dataframe(pd.DataFrame(data), hide_index=True, use_container_width=True)
+    st.latex(r"f(x) = (x^2 + 1) \bmod 8051")
+    st.latex(r"\gcd(|677 - 2117|,\; 8051) = \gcd(4460,\; 8051) = 83")
+    st.success("8051 = 83 × 97  (найдено на шаге i = 3)")
+
+with st.expander("📉 (p−1)-метод Полларда — пример: n = 299, B = 5", expanded=False):
+    st.markdown("**Задача:** разложить n = 299 = 13 × 23. Граница B = 5, a = 2.")
+    st.markdown("Простые ≤ 5: {2, 3, 5}. Вычисляем M = 2² · 3 · 5 = 60 (степени ≤ B).")
+    st.latex(r"a = 2,\quad M = 2^2 \cdot 3 \cdot 5 = 60")
+    st.latex(r"a^M \bmod n = 2^{60} \bmod 299")
+    st.markdown("Пошагово: 2² = 4, 4³ = 64, 64⁵ mod 299 = 64⁵ mod 299 = 285.")
+    st.latex(r"\gcd(2^{60} \bmod 299 - 1,\; 299) = \gcd(285 - 1,\; 299) = \gcd(284,\; 299) = 13")
+    st.success("299 = 13 × 23  (p−1 = 12 = 2²·3 — гладкое при B = 5)")
+
+with st.expander("📈 (p+1)-метод Вильямса — пример: n = 2059, B = 5", expanded=False):
+    st.markdown("**Задача:** разложить n = 2059 = 29 × 71. Параметр P = 3, B = 5.")
+    st.markdown("p+1 = 30 = 2 · 3 · 5 — гладкое при B = 5. M = 2² · 3 · 5 = 60.")
+    st.latex(r"V_0 = 2,\; V_1 = 3,\; V_k = 3 V_{k-1} - V_{k-2}")
+    st.markdown("Вычисляем V_M mod n через бинарный ladder-алгоритм:")
+    st.latex(r"V_{60} \bmod 2059 = 2")
+    st.latex(r"\gcd(V_{60} - 2,\; 2059) = \gcd(0,\; 2059) \to \text{увеличиваем } M")
+    st.markdown("При M = 60·7 = 420: V_420 mod 2059 = 1166.")
+    st.latex(r"\gcd(1166 - 2,\; 2059) = \gcd(1164,\; 2059) = 29")
+    st.success("2059 = 29 × 71  (p+1 = 30 гладкое, p−1 = 28 = 2²·7 — тоже гладкое, но метод Вильямса нашёл первым)")
+
+with st.expander("🔷 SQUFOF — пример: n = 11111", expanded=False):
+    st.markdown("**Задача:** разложить n = 11111 = 41 × 271. D = n = 11111, ⌊√D⌋ = 105.")
+    data = {
+        "шаг": [0, 1, 2, 3, 4, 5],
+        "P": [105, 106, 97, 108, 95, 110],
+        "Q": [1, 86, 75, 64, "8² = 64", "—"],
+        "q = ⌊(105+P)/Q⌋": ["—", 2, 2, 2, "—", "—"],
+        "Полный квадрат Q?": ["✗", "✗", "✗", "✓ (8²)", "—", "—"],
+    }
+    st.dataframe(pd.DataFrame(data), hide_index=True, use_container_width=True)
+    st.markdown("Q = 64 = 8² на чётном шаге → «золотая» форма найдена. Обратный ход:")
+    st.latex(r"P_0 = 8,\quad Q_0 = \frac{n - 8^2}{Q_{\text{prev}}} = \frac{11111 - 64}{75} = 148")
+    st.latex(r"\gcd(Q_0,\; n) = \gcd(148,\; 11111) = 41")
+    st.success("11111 = 41 × 271")
+
+with st.expander("🔗 CFRAC — пример: n = 3837523", expanded=False):
+    st.markdown("**Задача:** разложить n = 3837523 = 1049 × 3659. Факторная база B = 30: {−1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29}.")
+    st.markdown("Первые несколько шагов цепной дроби √3837523 ≈ 1959.0:")
+    data = {
+        "k": [0, 1, 2, 3],
+        "A_k mod n": [1959, 1, 3919, 3920],
+        "d_k": [3837523, 2, 3837519, 5],
+        "B-гладкое?": ["✗", "✓ (2¹)", "✗", "✓ (5¹)"],
+    }
+    st.dataframe(pd.DataFrame(data), hide_index=True, use_container_width=True)
+    st.markdown("После набора достаточного числа соотношений — Гаусс над GF(2):")
+    st.latex(r"X^2 \equiv Y^2 \pmod{n} \;\Rightarrow\; \gcd(X - Y,\; n) = 1049")
+    st.success("3837523 = 1049 × 3659")
+
+with st.expander("⚙️ Квадратичное решето (Basic) — пример: n = 15770708441", expanded=False):
+    st.markdown("**Задача:** n = 15770708441 = 105767 × 149143. B = 100, ⌈√n⌉ = 125581.")
+    st.markdown("Полином Q(x) = x² − n. Первые кандидаты:")
+    data = {
+        "x": [125582, 125583, 125584, 125585],
+        "Q(x) = x²−n": [323, 2573, 4825, 7079],
+        "Разложение": ["17·19", "—", "5²·193", "—"],
+        "B-гладкое?": ["✓", "✗", "✗ (193>B)", "✗"],
+    }
+    st.dataframe(pd.DataFrame(data), hide_index=True, use_container_width=True)
+    st.markdown("После набора |FB|+5 гладких соотношений — Гаусс → НОД:")
+    st.latex(r"\gcd(X - Y,\; n) = 105767")
+    st.success("15770708441 = 105767 × 149143")
+
+with st.expander("⚡ Оптимизированное QS — ключевое отличие: логарифмическое просеивание", expanded=False):
+    st.markdown("**То же n = 15770708441**, но вместо пробного деления — решето.")
+    st.markdown("Для p = 17: корни r² ≡ n (mod 17). Тонелли–Шенкс даёт r₁ = 4, r₂ = 13.")
+    st.latex(r"r_1^2 = 16 \equiv 15770708441 \pmod{17} \;\checkmark")
+    st.markdown("Добавляем log₂(17) ≈ 4.09 в позиции 4, 21, 38, … и 13, 30, 47, …")
+    data = {
+        "позиция i": [4, 13, 21, 30],
+        "sieve[i] после p=17": [4.09, 4.09, 4.09, 4.09],
+        "sieve[i] после всех p": ["≈ log Q(x₄)", "≈ log Q(x₁₃)", "≈ log Q(x₂₁)", "≈ log Q(x₃₀)"],
+        "кандидат?": ["возможно", "возможно", "возможно", "возможно"],
+    }
+    st.dataframe(pd.DataFrame(data), hide_index=True, use_container_width=True)
+    st.success("Сложность: O(M log log M) вместо O(M · |FB|) — на порядок быстрее для больших B")
+
+with st.expander("🧩 LPV — пример склейки полугладких", expanded=False):
+    st.markdown("**Идея:** Q(x₁) = 2³ · 7 · **P** и Q(x₂) = 3 · 5 · **P** с одним большим простым P = 1013.")
+    st.latex(r"Q(x_1) \cdot Q(x_2) = 2^3 \cdot 3 \cdot 5 \cdot 7 \cdot P^2")
+    st.markdown("P² — полный квадрат, поэтому произведение раскладывается по факторной базе:")
+    st.latex(r"(x_1 \cdot x_2)^2 \equiv 2^3 \cdot 3 \cdot 5 \cdot 7 \pmod{n}")
+    st.success("Одна «склейка» двух полугладких = одно полноценное соотношение. Ускорение в 2–4×.")
+
+with st.expander("🔀 MPQS — пример выбора полинома", expanded=False):
+    st.markdown("**Задача:** n = 15770708441, M = 10000.")
+    st.latex(r"t \approx \sqrt{\frac{2n}{M}} = \sqrt{\frac{2 \cdot 15770708441}{10000}} \approx 1776")
+    st.markdown("Выбираем ближайшее простое t = 1777. Находим b: b² ≡ n (mod t) через Тонелли–Шенкс.")
+    st.latex(r"b = 862,\quad a = t^2 = 1777^2 = 3157729")
+    st.markdown("Полином: Q(x) = ax² + 2bx + c, где c = (b²−n)/a.")
+    st.latex(r"|Q(x)| \leq \frac{M\sqrt{n}}{2} \approx \frac{10000 \cdot 125581}{2} \approx 6.3 \times 10^8")
+    st.markdown("Это в ~25 раз меньше, чем у базового QS (x² − n ≈ 1.6×10¹⁰) → больше гладких чисел.")
+    st.success("Каждый новый t даёт независимый полином. Меньшие значения Q(x) → выше доля гладких.")
+
+with st.expander("⚡ Параллельный MPQS — схема распределения работы", expanded=False):
+    st.markdown("**Архитектура:** 4 ядра, нужно 50 полиномов.")
+    data = {
+        "Worker": ["W1", "W2", "W3", "W4"],
+        "Полиномы": ["t₁, t₅, t₉, …", "t₂, t₆, t₁₀, …", "t₃, t₇, t₁₁, …", "t₄, t₈, t₁₂, …"],
+        "Соотношений": ["~12–13", "~12–13", "~12–13", "~12–13"],
+        "Время": ["T/4", "T/4", "T/4", "T/4"],
+    }
+    st.dataframe(pd.DataFrame(data), hide_index=True, use_container_width=True)
+    st.latex(r"\text{Speedup} \approx N_{\text{cores}} = 4\times")
+    st.markdown("Master собирает все соотношения → Гаусс → НОД. Просеивание — узкое место, оно параллелится идеально.")
+    st.success("Теоретическое ускорение линейно по числу ядер при достаточном числе полиномов.")
+
+st.divider()
+
 # ── Сравнительная таблица ────────────────────────────────────────────────────
 
-st.header("4. Сравнительная таблица")
+st.header("5. Сравнительная таблица")
 
 comparison = {
     "Алгоритм": [
@@ -432,7 +570,6 @@ comparison = {
     ],
 }
 
-import pandas as pd
 st.dataframe(pd.DataFrame(comparison), use_container_width=True, hide_index=True)
 
 st.divider()

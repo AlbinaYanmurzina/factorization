@@ -170,7 +170,7 @@ st.sidebar.header("Настройки эксперимента")
 min_bits = st.sidebar.slider("Минимальная разрядность (бит)", 16, 60, 20, step=2)
 max_bits = st.sidebar.slider("Максимальная разрядность (бит)", 16, 60, 40, step=2)
 step_bits = st.sidebar.slider("Шаг разрядности (бит)", 2, 8, 4, step=2)
-runs_per_bit = st.sidebar.slider("Повторений на разрядность (для error bars)", 1, 7, 3)
+runs_per_bit = st.sidebar.slider("Замеров на точку графика", 1, 7, 3)
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Алгоритмы")
@@ -248,7 +248,7 @@ if run_btn:
             for num in test_numbers:
                 try:
                     res = requests.post(
-                        "http://127.0.0.1:8000/api/factorize",
+                        "http://127.0.0.1:8453/api/factorize",
                         json={"number": str(num), "algorithm": alg_key},
                         timeout=35,
                     )
@@ -262,7 +262,7 @@ if run_btn:
 
     progress_bar.empty()
     status_text.empty()
-    st.success(f"Эксперимент завершён. Протестировано разрядностей: {len(bit_range)}, алгоритмов: {len(selected_algos)}, повторений: {runs_per_bit}.")
+    st.success(f"Эксперимент завершён. Протестировано разрядностей: {len(bit_range)}, алгоритмов: {len(selected_algos)}, замеров на точку: {runs_per_bit}.")
 
     # ── Агрегация результатов ───────────────────────────────────────────────
 
@@ -423,7 +423,7 @@ if run_btn:
     # ── Статистика по повторениям ───────────────────────────────────────────
 
     if runs_per_bit > 1:
-        st.subheader("Статистика повторений (стандартное отклонение, мс)")
+        st.subheader("Статистика замеров (стандартное отклонение, мс)")
         std_rows = []
         for _, alg_key in selected_algos:
             alg_name = next(n for n, k in selected_algos if k == alg_key)

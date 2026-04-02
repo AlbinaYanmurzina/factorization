@@ -26,7 +26,7 @@ def main():
     backend_cmd = [
         PYTHON, "-m", "uvicorn", "main:app",
         "--host", "127.0.0.1",
-        "--port", "8000",
+        "--port", "8453",
         "--reload",
     ]
 
@@ -36,7 +36,7 @@ def main():
         "--server.port", "8501",
     ]
 
-    print("Запуск бэкенда  → http://127.0.0.1:8000")
+    print("Запуск бэкенда  → http://127.0.0.1:8453")
     print("Запуск фронтенда → http://localhost:8501")
     print("Для остановки нажмите Ctrl+C\n")
 

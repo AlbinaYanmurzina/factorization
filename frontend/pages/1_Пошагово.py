@@ -159,7 +159,7 @@ if st.button("Факторизовать", type="primary"):
         st.write("Отправка запроса на сервер...")
         try:
             response = requests.post(
-                "http://127.0.0.1:8000/api/factorize",
+                "http://127.0.0.1:8453/api/factorize",
                 json={"number": number_input, "algorithm": algo_key}
             )
 

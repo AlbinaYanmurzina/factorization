@@ -165,6 +165,7 @@ class QuadraticSieveMPQS(FactorizationAlgorithm):
             pivot_row += 1
         dependencies = [M_mat[r][cols:] for r in range(pivot_row, rows)]
 
+        display_matrix = [row[:30] for row in matrix_mod2[:30]]
         self.log_step("Этап 3: Метод Гаусса над GF(2)", {
             "message": (
                 f"Матрица {rows} × {cols}: строки — гладкие числа, столбцы — простые из FB.\n"
@@ -172,7 +173,8 @@ class QuadraticSieveMPQS(FactorizationAlgorithm):
                 f"Приводим к ступенчатому виду: XOR строк вместо обычного сложения.\n"
                 f"Нулевые строки = линейные зависимости = подмножества, чьё произведение — полный квадрат.\n"
                 f"Ранг: {pivot_row}. Зависимостей: {len(dependencies)}."
-            )
+            ),
+            "matrix_data": display_matrix
         })
 
         # 4. Проверка

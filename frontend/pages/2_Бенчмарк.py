@@ -1,105 +1,478 @@
 import streamlit as st
 import requests
-import time
 import random
+import math
+import platform
+import statistics
 import plotly.graph_objects as go
 import pandas as pd
-from sympy import isprime, nextprime # Понадобится для генерации тестов
+from sympy import nextprime
 
 st.set_page_config(page_title="Сравнение алгоритмов", page_icon="📊", layout="wide")
 
-st.title("📊 Вычислительные эксперименты и бенчмарки")
+# ── Информация о системе ────────────────────────────────────────────────────
+
+@st.cache_data
+def get_system_info() -> dict:
+    info = {
+        "ОС": platform.system() + " " + platform.release(),
+        "Процессор": platform.processor() or platform.machine(),
+        "Python": platform.python_version(),
+        "Ядра CPU": "—",
+        "RAM": "—",
+    }
+    try:
+        import psutil, os
+        info["Ядра CPU"] = f"{os.cpu_count()} логических / {psutil.cpu_count(logical=False)} физических"
+        ram_gb = psutil.virtual_memory().total / (1024 ** 3)
+        info["RAM"] = f"{ram_gb:.1f} ГБ"
+    except ImportError:
+        import os
+        info["Ядра CPU"] = str(os.cpu_count())
+    return info
+
+sys_info = get_system_info()
+
+# ── Теоретические кривые сложности ─────────────────────────────────────────
+
+def theoretical_curve(algo_key: str, bits_list: list) -> list | None:
+    """
+    Возвращает список относительных значений теоретической сложности
+    (нормированных к первой точке), или None если кривая не определена.
+    """
+    curves = {
+        # O(n^(1/4)) = O(2^(bits/4))
+        "pollard_rho":  lambda b: 2 ** (b / 4),
+        # O(n^(1/4)) аналогично
+        "squfof":       lambda b: 2 ** (b / 4),
+        # O(n^(1/2)) = O(2^(bits/2))
+        "fermat":       lambda b: 2 ** (b / 2),
+        "pollard_p1":   lambda b: 2 ** (b / 2),
+        "williams_p1":  lambda b: 2 ** (b / 2),
+        # L-нотация: exp(c * sqrt(bits * ln2 * ln(bits * ln2)))
+        "cfrac":        lambda b: math.exp(math.sqrt(b * math.log(2) * math.log(b * math.log(2) + 1))),
+        "qs_basic":     lambda b: math.exp(math.sqrt(b * math.log(2) * math.log(b * math.log(2) + 1))),
+        "qs_optimized": lambda b: math.exp(math.sqrt(b * math.log(2) * math.log(b * math.log(2) + 1))),
+        "qs_auto":      lambda b: math.exp(math.sqrt(b * math.log(2) * math.log(b * math.log(2) + 1))),
+        "qs_lpv":       lambda b: math.exp(math.sqrt(b * math.log(2) * math.log(b * math.log(2) + 1))),
+        "qs_mpqs":      lambda b: math.exp(math.sqrt(b * math.log(2) * math.log(b * math.log(2) + 1))),
+        "qs_mpqs_parallel": lambda b: math.exp(math.sqrt(b * math.log(2) * math.log(b * math.log(2) + 1))),
+    }
+    fn = curves.get(algo_key)
+    if fn is None:
+        return None
+    raw = [fn(b) for b in bits_list]
+    if raw[0] == 0:
+        return None
+    # Нормируем: первая точка = первое реальное ненулевое значение
+    return raw
+
+ALGO_COMPLEXITY_LABEL = {
+    "pollard_rho":      "O(n^{1/4})",
+    "squfof":           "O(n^{1/4})",
+    "fermat":           "O(n^{1/2})",
+    "pollard_p1":       "O(n^{1/2})",
+    "williams_p1":      "O(n^{1/2})",
+    "cfrac":            "L[1/2, c]",
+    "qs_basic":         "L[1/2, c]",
+    "qs_optimized":     "L[1/2, c]",
+    "qs_auto":          "L[1/2, c]",
+    "qs_lpv":           "L[1/2, c]",
+    "qs_mpqs":          "L[1/2, c]",
+    "qs_mpqs_parallel": "L[1/2, c]",
+}
+
+# ── Вспомогательные функции ─────────────────────────────────────────────────
 
 def generate_semiprime(bits: int) -> int:
-    """Генерирует число N = p * q заданной разрядности в битах"""
-    # Ищем два простых числа примерно одинаковой длины (bits // 2)
     start_p = random.getrandbits(bits // 2)
     start_q = random.getrandbits(bits // 2)
-    
-    p = nextprime(start_p)
-    q = nextprime(start_q)
-    
+    p = nextprime(max(start_p, 3))
+    q = nextprime(max(start_q, 3))
+    while q == p:
+        q = nextprime(q)
     return p * q
 
-# Боковая панель настроек
-st.sidebar.header("Настройки эксперимента")
-min_bits = st.sidebar.slider("Минимальная разрядность (бит)", min_value=16, max_value=60, value=20, step=2)
-max_bits = st.sidebar.slider("Максимальная разрядность (бит)", min_value=16, max_value=60, value=40, step=2)
-runs_per_bit = st.sidebar.number_input("Кол-во тестов на одну разрядность", value=2, min_value=1)
+ALGO_LIST = [
+    ("ρ-метод Полларда (разд. 3.4)",                        "pollard_rho"),
+    ("(p-1)-метод Полларда (разд. 3.2)",                    "pollard_p1"),
+    ("Метод Ферма (разд. 3.1)",                             "fermat"),
+    ("(p+1)-метод Вильямса (разд. 3.3)",                    "williams_p1"),
+    ("Факторизация непрерывными дробями (разд. 3.6)",       "cfrac"),
+    ("Метод квадратичных форм SQUFOF (разд. 3.8)",          "squfof"),
+    ("Алгоритм Диксона (Basic QS, разд. 6.1)",              "qs_basic"),
+    ("Метод Померанца (Sieving QS, разд. 6.2)",             "qs_optimized"),
+    ("Квадратичное решето (Auto-tuning, разд. 6.5)",        "qs_auto"),
+    ("Вариация большого множителя (LPV, разд. 6.8)",        "qs_lpv"),
+    ("Множество полиномов Монтгомери (MPQS, разд. 6.9)",    "qs_mpqs"),
+    ("Параллельный MPQS (multiprocessing, разд. 6.9)",      "qs_mpqs_parallel"),
+]
 
-if st.sidebar.button("🚀 Запустить бенчмарк", type="primary"):
-    
-    bit_range = list(range(min_bits, max_bits + 1, 4))
-    
-    results = []
-    
-    progress_bar = st.progress(0)
-    total_steps = len(bit_range)
-    
-    for i, bit in enumerate(bit_range):
-        st.write(f"Тестирование разрядности: **{bit} бит**...")
-        
-        # Генерируем тестовые числа
+# Группы алгоритмов для быстрого выбора
+ALGO_GROUPS: dict[str, list[str]] = {
+    "Все алгоритмы": [k for _, k in ALGO_LIST],
+
+    # По классу сложности
+    "Экспоненциальные  O(n^c)": [
+        "fermat", "pollard_rho", "pollard_p1", "williams_p1", "squfof",
+    ],
+    "Субэкспоненциальные  L[1/2, c]": [
+        "cfrac", "qs_basic", "qs_optimized", "qs_auto", "qs_lpv", "qs_mpqs", "qs_mpqs_parallel",
+    ],
+
+    # По методу
+    "Методы на основе НОД": [
+        "pollard_rho", "pollard_p1", "williams_p1",
+    ],
+    "Методы квадратичных форм": [
+        "fermat", "squfof", "cfrac",
+    ],
+    "Квадратичное решето (все варианты)": [
+        "qs_basic", "qs_optimized", "qs_auto", "qs_lpv", "qs_mpqs", "qs_mpqs_parallel",
+    ],
+
+    # Практические пресеты
+    "Быстрый тест (малые числа ≤ 32 бит)": [
+        "fermat", "pollard_rho", "squfof", "qs_basic",
+    ],
+    "Сравнение КР-вариантов": [
+        "qs_optimized", "qs_auto", "qs_lpv", "qs_mpqs", "qs_mpqs_parallel",
+    ],
+    "Лучшие по классу": [
+        "pollard_rho", "squfof", "qs_mpqs", "qs_mpqs_parallel",
+    ],
+}
+
+# Алгоритмы, которые слишком медленны на больших числах
+SLOW_ABOVE_BITS = {
+    "qs_basic": 32,
+    "fermat":   32,
+}
+
+TIMEOUT_MS = 30_000  # считаем тайм-аут если время > 30 с
+
+
+# ── Заголовок и информация о системе ───────────────────────────────────────
+
+st.title("📊 Вычислительные эксперименты")
+
+with st.expander("🖥️ Стенд тестирования", expanded=True):
+    cols = st.columns(len(sys_info))
+    for col, (key, val) in zip(cols, sys_info.items()):
+        col.metric(key, val)
+
+st.divider()
+
+# ── Боковая панель ──────────────────────────────────────────────────────────
+
+st.sidebar.header("Настройки эксперимента")
+
+min_bits = st.sidebar.slider("Минимальная разрядность (бит)", 16, 60, 20, step=2)
+max_bits = st.sidebar.slider("Максимальная разрядность (бит)", 16, 60, 40, step=2)
+step_bits = st.sidebar.slider("Шаг разрядности (бит)", 2, 8, 4, step=2)
+runs_per_bit = st.sidebar.slider("Повторений на разрядность (для error bars)", 1, 7, 3)
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("Алгоритмы")
+
+# Пресет группы
+group_name = st.sidebar.selectbox(
+    "Группа / пресет:",
+    list(ALGO_GROUPS.keys()),
+    index=0,
+)
+preset_keys = set(ALGO_GROUPS[group_name])
+
+# Описания групп
+GROUP_DESC = {
+    "Все алгоритмы": "Все 12 реализованных алгоритмов.",
+    "Экспоненциальные  O(n^c)": "Сложность растёт как степень n: O(n^{1/4}) или O(n^{1/2}). Практичны до ~40–50 бит.",
+    "Субэкспоненциальные  L[1/2, c]": "Сложность L[1/2, c] = exp(c·√(ln n · ln ln n)) — быстрее экспоненты, медленнее полинома. Основа современной криптографии.",
+    "Методы на основе НОД": "Ищут делитель через НОД: ρ-метод (случайный цикл), p−1 и p+1 (гладкость делителя).",
+    "Методы квадратичных форм": "Ферма (n = x²−y²), SQUFOF (квадратичные формы Шенкса), CFRAC (непрерывные дроби).",
+    "Квадратичное решето (все варианты)": "Семейство QS: базовый → оптимизированный → AUTO → LPV → MPQS → параллельный MPQS.",
+    "Быстрый тест (малые числа ≤ 32 бит)": "Только алгоритмы, эффективные на малых числах. Быстро запускается.",
+    "Сравнение КР-вариантов": "Сравнение оптимизаций внутри семейства квадратичного решета.",
+    "Лучшие по классу": "По одному лучшему представителю из каждого класса сложности.",
+}
+st.sidebar.caption(GROUP_DESC.get(group_name, ""))
+
+st.sidebar.markdown("Тонкая настройка:")
+selected_algos = []
+for name, key in ALGO_LIST:
+    checked = key in preset_keys
+    if st.sidebar.checkbox(name, value=checked, key=f"cb_{key}"):
+        selected_algos.append((name, key))
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("Отображение")
+log_scale = st.sidebar.toggle("Логарифмическая шкала (ось Y)", value=True)
+show_theory = st.sidebar.toggle("Теоретические кривые O(f(n))", value=True)
+show_errorbars = st.sidebar.toggle("Планки погрешности (стандартное отклонение)", value=True)
+
+run_btn = st.sidebar.button("🚀 Запустить тест", type="primary", use_container_width=True)
+
+# ── Запуск бенчмарка ────────────────────────────────────────────────────────
+
+if run_btn:
+    if min_bits >= max_bits:
+        st.error("Минимальная разрядность должна быть меньше максимальной.")
+        st.stop()
+
+    bit_range = list(range(min_bits, max_bits + 1, step_bits))
+    total_steps = len(bit_range) * len(selected_algos)
+    step_counter = 0
+
+    # results[algo_key][bit] = list of times (ms)
+    raw_results: dict[str, dict[int, list[float]]] = {
+        key: {b: [] for b in bit_range} for _, key in selected_algos
+    }
+
+    progress_bar = st.progress(0, text="Запуск...")
+    status_text = st.empty()
+
+    for bit in bit_range:
         test_numbers = [generate_semiprime(bit) for _ in range(runs_per_bit)]
-        
-        for alg_name, alg_key in [
-            ("Поллард (Rho)", "pollard_rho"),
-            ("Поллард (p-1)", "pollard_p1"),
-            ("КР базовый", "qs_basic"),
-            ("КР оптимизированный", "qs_optimized"),
-            ("КР AUTO", "qs_auto"),
-            ("КР LPV", "qs_lpv"),
-            ("КР MPQS", "qs_mpqs"),
-            ("КР MPQS Параллельный", "qs_mpqs_parallel"),
-        ]:
-            # КР базовый неэффективен на числах > 32 бит — пропускаем
-            if alg_key == "qs_basic" and bit > 32:
-                results.append({"Разрядность (бит)": bit, "Алгоритм": alg_name, "Среднее время (мс)": None})
+
+        for alg_name, alg_key in selected_algos:
+            step_counter += 1
+            progress_bar.progress(
+                step_counter / total_steps,
+                text=f"{alg_name} @ {bit} бит ({step_counter}/{total_steps})"
+            )
+
+            if alg_key in SLOW_ABOVE_BITS and bit > SLOW_ABOVE_BITS[alg_key]:
+                # Пропускаем — слишком медленно
                 continue
-            total_time = 0
-            
+
             for num in test_numbers:
                 try:
                     res = requests.post(
                         "http://127.0.0.1:8000/api/factorize",
-                        json={"number": str(num), "algorithm": alg_key}
+                        json={"number": str(num), "algorithm": alg_key},
+                        timeout=35,
                     )
                     if res.status_code == 200:
-                        total_time += res.json()["time_ms"]
-                except:
+                        t = res.json()["time_ms"]
+                        # Тайм-аут на бэкенде возвращает ~30000 мс — помечаем как None
+                        if t < TIMEOUT_MS:
+                            raw_results[alg_key][bit].append(t)
+                except Exception:
                     pass
-            
-            avg_time = total_time / runs_per_bit
-            results.append({"Разрядность (бит)": bit, "Алгоритм": alg_name, "Среднее время (мс)": avg_time})
-            
-        progress_bar.progress((i + 1) / total_steps)
 
-    # Строим график
-    df = pd.DataFrame(results)
-    
-    st.success("Эксперимент завершен!")
-    
-    st.subheader("Линейный график зависимости времени от битности")
-    
+    progress_bar.empty()
+    status_text.empty()
+    st.success(f"Эксперимент завершён. Протестировано разрядностей: {len(bit_range)}, алгоритмов: {len(selected_algos)}, повторений: {runs_per_bit}.")
+
+    # ── Агрегация результатов ───────────────────────────────────────────────
+
+    # avg_results[algo_key] = {bit: avg_ms or None}
+    avg_results: dict[str, dict[int, float | None]] = {}
+    std_results: dict[str, dict[int, float]] = {}
+
+    for _, alg_key in selected_algos:
+        avg_results[alg_key] = {}
+        std_results[alg_key] = {}
+        for bit in bit_range:
+            times = raw_results[alg_key][bit]
+            if times:
+                avg_results[alg_key][bit] = statistics.mean(times)
+                std_results[alg_key][bit] = statistics.stdev(times) if len(times) > 1 else 0.0
+            else:
+                avg_results[alg_key][bit] = None
+                std_results[alg_key][bit] = 0.0
+
+    # ── Построение графика ──────────────────────────────────────────────────
+
+    st.subheader("График зависимости времени от разрядности")
+
+    # Цветовая палитра + стиль линии по классу сложности
+    COLORS = [
+        "#e94560", "#0f3460", "#16213e", "#533483",
+        "#2b9348", "#e9c46a", "#f4a261", "#264653",
+        "#a8dadc", "#457b9d", "#e63946", "#06d6a0",
+    ]
+
+    # Экспоненциальные — сплошная, субэкспоненциальные — штрих
+    SUBEXP_KEYS = {
+        "cfrac", "qs_basic", "qs_optimized", "qs_auto",
+        "qs_lpv", "qs_mpqs", "qs_mpqs_parallel",
+    }
+    LINE_DASH = {k: "dash" for k in SUBEXP_KEYS}  # субэксп — штрих
+
     fig = go.Figure()
-    for alg in df["Алгоритм"].unique():
-        alg_data = df[df["Алгоритм"] == alg]
+
+    for idx, (alg_name, alg_key) in enumerate(selected_algos):
+        color = COLORS[idx % len(COLORS)]
+
+        x_vals = []
+        y_vals = []
+        y_err  = []
+
+        for bit in bit_range:
+            avg = avg_results[alg_key].get(bit)
+            if avg is not None:
+                x_vals.append(bit)
+                y_vals.append(avg)
+                y_err.append(std_results[alg_key].get(bit, 0.0))
+
+        if not x_vals:
+            continue
+
+        complexity = ALGO_COMPLEXITY_LABEL.get(alg_key, "")
+        trace_name = f"{alg_name} [{complexity}]"
+        line_dash = LINE_DASH.get(alg_key, "solid")
+
+        error_y = dict(
+            type="data",
+            array=y_err,
+            visible=show_errorbars,
+            color=color,
+            thickness=1.5,
+            width=4,
+        ) if show_errorbars else None
+
         fig.add_trace(go.Scatter(
-            x=alg_data["Разрядность (бит)"], 
-            y=alg_data["Среднее время (мс)"],
-            mode='lines+markers',
-            name=alg
+            x=x_vals,
+            y=y_vals,
+            mode="lines+markers",
+            name=trace_name,
+            line=dict(color=color, width=2, dash=line_dash),
+            marker=dict(size=7, color=color),
+            error_y=error_y,
+            hovertemplate=(
+                f"<b>{alg_name}</b><br>"
+                "Разрядность: %{x} бит<br>"
+                "Время: %{y:.2f} мс<br>"
+                "<extra></extra>"
+            ),
         ))
-        
+
+        # Теоретическая кривая
+        if show_theory:
+            theory_raw = theoretical_curve(alg_key, x_vals)
+            if theory_raw and y_vals:
+                # Нормируем: масштабируем теорию к первой реальной точке
+                scale = y_vals[0] / theory_raw[0] if theory_raw[0] != 0 else 1
+                theory_scaled = [v * scale for v in theory_raw]
+
+                fig.add_trace(go.Scatter(
+                    x=x_vals,
+                    y=theory_scaled,
+                    mode="lines",
+                    name=f"{alg_name} (теория)",
+                    line=dict(color=color, width=1.5, dash="dot"),
+                    opacity=0.5,
+                    showlegend=False,
+                    hovertemplate=(
+                        f"<b>{alg_name} — теория {complexity}</b><br>"
+                        "Разрядность: %{x} бит<br>"
+                        "Норм. значение: %{y:.2f}<br>"
+                        "<extra></extra>"
+                    ),
+                ))
+
     fig.update_layout(
         xaxis_title="Разрядность числа (бит)",
-        yaxis_title="Среднее время выполнения (мс)",
-        hovermode="x unified"
+        yaxis_title="Среднее время (мс)" + (" [лог. шкала]" if log_scale else ""),
+        yaxis_type="log" if log_scale else "linear",
+        hovermode="x unified",
+        legend=dict(
+            orientation="v",
+            x=1.01, y=1,
+            bgcolor="rgba(0,0,0,0)",
+        ),
+        margin=dict(r=220),
+        height=560,
     )
-    
+
+    # Аннотация: пунктир = теория, стиль линий = класс сложности
+    if show_theory:
+        fig.add_annotation(
+            text="— — пунктир: теоретическая O(f(n))",
+            xref="paper", yref="paper",
+            x=0, y=-0.12,
+            showarrow=False,
+            font=dict(size=11, color="gray"),
+        )
+    fig.add_annotation(
+        text="сплошная = экспоненциальные · штрих = субэкспоненциальные",
+        xref="paper", yref="paper",
+        x=0, y=-0.17,
+        showarrow=False,
+        font=dict(size=11, color="gray"),
+    )
+
     st.plotly_chart(fig, use_container_width=True)
-    
-    # Таблица результатов
-    st.subheader("Сводная таблица")
-    pivot_df = df.pivot(index="Разрядность (бит)", columns="Алгоритм", values="Среднее время (мс)")
-    st.dataframe(pivot_df)
+
+    # ── Сводная таблица ─────────────────────────────────────────────────────
+
+    st.subheader("Сводная таблица (среднее время, мс)")
+
+    table_rows = []
+    for _, alg_key in selected_algos:
+        alg_name = next(n for n, k in selected_algos if k == alg_key)
+        row = {"Алгоритм": alg_name, "Сложность": ALGO_COMPLEXITY_LABEL.get(alg_key, "—")}
+        for bit in bit_range:
+            avg = avg_results[alg_key].get(bit)
+            row[f"{bit} бит"] = f"{avg:.2f}" if avg is not None else "—"
+        table_rows.append(row)
+
+    st.dataframe(pd.DataFrame(table_rows), use_container_width=True, hide_index=True)
+
+    # ── Статистика по повторениям ───────────────────────────────────────────
+
+    if runs_per_bit > 1:
+        st.subheader("Статистика повторений (стандартное отклонение, мс)")
+        std_rows = []
+        for _, alg_key in selected_algos:
+            alg_name = next(n for n, k in selected_algos if k == alg_key)
+            row = {"Алгоритм": alg_name}
+            for bit in bit_range:
+                std = std_results[alg_key].get(bit, 0.0)
+                avg = avg_results[alg_key].get(bit)
+                if avg and avg > 0:
+                    cv = std / avg * 100
+                    row[f"{bit} бит"] = f"±{std:.2f} ({cv:.0f}%)"
+                else:
+                    row[f"{bit} бит"] = "—"
+            std_rows.append(row)
+        st.dataframe(pd.DataFrame(std_rows), use_container_width=True, hide_index=True)
+        st.caption("В скобках — коэффициент вариации (std/mean × 100%). Чем ниже, тем стабильнее замеры.")
+
+else:
+    # Заглушка до запуска
+    st.info("Настройте параметры в боковой панели и нажмите **🚀 Запустить тест**.")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("**Группы алгоритмов:**")
+        groups_table = [
+            {"Группа": "Экспоненциальные O(n^c)", "Алгоритмы": "Метод Ферма, ρ-метод Полларда, (p-1)-метод Полларда, (p+1)-метод Вильямса, SQUFOF"},
+            {"Группа": "Субэкспоненциальные L[1/2,c]", "Алгоритмы": "CFRAC, Алгоритм Диксона, Метод Померанца, Auto-tuning, LPV, MPQS, Параллельный MPQS"},
+            {"Группа": "Методы на основе НОД", "Алгоритмы": "ρ-метод Полларда, (p-1)-метод Полларда, (p+1)-метод Вильямса"},
+            {"Группа": "Методы квадратичных форм", "Алгоритмы": "Метод Ферма, SQUFOF, CFRAC"},
+            {"Группа": "Квадратичное решето", "Алгоритмы": "Алгоритм Диксона → Метод Померанца → Auto-tuning → LPV → MPQS → Параллельный MPQS"},
+            {"Группа": "Быстрый тест (≤ 32 бит)", "Алгоритмы": "Метод Ферма, ρ-метод Полларда, SQUFOF, Алгоритм Диксона"},
+            {"Группа": "Сравнение КР-вариантов", "Алгоритмы": "Метод Померанца, Auto-tuning, LPV, MPQS, Параллельный MPQS"},
+            {"Группа": "Лучшие по классу", "Алгоритмы": "ρ-метод Полларда, SQUFOF, MPQS, Параллельный MPQS"},
+        ]
+        st.dataframe(pd.DataFrame(groups_table), use_container_width=True, hide_index=True)
+
+    with col2:
+        st.markdown("**Теоретические кривые:**")
+        st.markdown("""
+| Алгоритм | Сложность |
+|---|---|
+| Поллард ρ, SQUFOF | O(n^{1/4}) |
+| Ферма, p±1 методы | O(n^{1/2}) |
+| CFRAC, КР (все варианты) | L[1/2, c] |
+
+**Как читать график:**
+- Сплошные линии — экспоненциальные алгоритмы
+- Штриховые линии — субэкспоненциальные
+- Пунктирные линии — теоретические кривые O(f(n))
+- Планки погрешности — стандартное отклонение по повторениям
+        """)
+

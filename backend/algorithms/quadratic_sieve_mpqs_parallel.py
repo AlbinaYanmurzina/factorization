@@ -203,6 +203,7 @@ class QuadraticSieveMPQSParallel(FactorizationAlgorithm):
             pivot_row += 1
         dependencies = [M_mat[r][cols:] for r in range(pivot_row, rows)]
 
+        display_matrix = [row[:30] for row in matrix_mod2[:30]]
         self.log_step("Этап 3: Метод Гаусса (главный процесс)", {
             "message": (
                 f"Матрица {rows} × {cols}: строки — гладкие числа, столбцы — простые из FB.\n"
@@ -211,7 +212,8 @@ class QuadraticSieveMPQSParallel(FactorizationAlgorithm):
                 f"Нулевые строки = линейные зависимости = подмножества, чьё произведение — полный квадрат.\n"
                 f"Ранг: {pivot_row}. Зависимостей: {len(dependencies)}.\n"
                 f"Гаусс выполняется в главном процессе — все данные уже собраны от воркеров."
-            )
+            ),
+            "matrix_data": display_matrix
         })
 
         # 4. Проверка

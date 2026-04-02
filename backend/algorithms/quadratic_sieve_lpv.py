@@ -162,6 +162,7 @@ class QuadraticSieveLPV(FactorizationAlgorithm):
             pivot_row += 1
         dependencies = [M_mat[r][cols:] for r in range(pivot_row, rows)]
 
+        display_matrix = [row[:30] for row in matrix_mod2[:30]]
         self.log_step("Этап 3: Метод Гаусса над GF(2)", {
             "message": (
                 f"Матрица {rows} × {cols}: строки — гладкие числа, столбцы — простые из FB.\n"
@@ -172,7 +173,8 @@ class QuadraticSieveLPV(FactorizationAlgorithm):
                 f"Ранг: {pivot_row}. Зависимостей: {len(dependencies)}.\n"
                 f"Важно для LPV: соотношения со склеенными парами содержат P² под произведением,\n"
                 f"поэтому при вычислении Y дополнительно умножаем на P — он уходит под корень."
-            )
+            ),
+            "matrix_data": display_matrix
         })
 
         # 4. Проверка зависимостей

@@ -1,0 +1,266 @@
+# backend/algorithms/squfof.py
+import math
+from typing import List, Optional, Tuple
+from .base import FactorizationAlgorithm
+from .math_utils import is_prime
+
+
+class SQUFOF(FactorizationAlgorithm):
+    """
+    Метод квадратичных форм Шенкса — SQUFOF
+    (SQUare FOrms Factorization, раздел 3.8).
+
+    Самый быстрый экспоненциальный алгоритм для чисел до ~60-70 бит.
+    Сложность: O(n^(1/4)) по времени, O(1) по памяти.
+
+    Идея: в цикле редуцированных бинарных квадратичных форм
+    с дискриминантом D = k·n ищем форму (a, b, c), где a — полный квадрат s² > 1.
+    Это «золотая форма» — из неё извлекается делитель.
+
+    Форма (a, b, c): ax² + bxy + cy²,  дискриминант D = b² − 4ac.
+    Редукция (шаг ро): (a,b,c) → (c, -b mod 2c, ...)
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    # ------------------------------------------------------------------
+    # Арифметика квадратичных форм
+    # ------------------------------------------------------------------
+
+    def _reduce_step(self, P: int, Q: int, D_sqrt: int) -> Tuple[int, int]:
+        """
+        Один шаг редукции в инфраструктуре Шенкса.
+
+        Форма кодируется парой (P, Q), где:
+            b = 2P − 2·D_sqrt  (неявно)
+            a = Q (предыдущий)
+            c = Q_new
+
+        Стандартная рекуррентность SQUFOF:
+            q  = floor((D_sqrt + P) / Q)
+            P' = q·Q − P
+            Q' = Q_prev + q·(P − P')   (через Q_prev передаётся снаружи)
+
+        Здесь используем упрощённую форму через пару (P, Q):
+            q  = (D_sqrt + P) // Q
+            P' = q * Q - P
+        Q' вычисляется снаружи через Q_prev.
+        """
+        q = (D_sqrt + P) // Q
+        P_new = q * Q - P
+        return P_new, q
+
+    # ------------------------------------------------------------------
+    # Один проход SQUFOF для данного k
+    # ------------------------------------------------------------------
+
+    def _squfof_attempt(self, n: int, k: int, max_iter: int) -> Optional[int]:
+        """
+        Пытается найти делитель n с мультипликатором k.
+        Возвращает нетривиальный делитель или None.
+        """
+        D = k * n
+        D_sqrt = math.isqrt(D)
+
+        # D должно быть не точным квадратом
+        if D_sqrt * D_sqrt == D:
+            return None
+
+        # Начальная форма: (P0, Q0, Q_prev) = (D_sqrt, 1, ?)
+        # Стандартная инициализация SQUFOF:
+        #   форма F_0 = (1, 2*D_sqrt, D_sqrt²−D) — но работаем с парой (P,Q)
+        #   P_0 = D_sqrt,  Q_0 = 1,  Q_{-1} = D − D_sqrt²  (не нужен явно)
+
+        P = D_sqrt
+        Q_prev = 1
+        Q = D - D_sqrt * D_sqrt  # = D mod 1 = D − D_sqrt² > 0
+
+        table_data = []
+        max_table = 25
+
+        # ---- Фаза 1: ищем «золотую» форму (Q — полный квадрат) ----
+        for i in range(1, max_iter + 1):
+            q = (D_sqrt + P) // Q
+            P_new = q * Q - P
+            Q_new = Q_prev + q * (P - P_new)
+
+            # Логируем первые шаги
+            s = math.isqrt(Q)
+            is_sq = (s * s == Q) and s > 1
+
+            if i <= max_table or is_sq:
+                table_data.append({
+                    "i": i,
+                    "P": P,
+                    "Q": Q,
+                    "q = ⌊(√D+P)/Q⌋": q,
+                    "P'": P_new,
+                    "Q'": Q_new,
+                    "√Q": s if is_sq else f"≈{s}",
+                    "Квадрат?": "✓ ЗОЛОТАЯ" if is_sq else "✗"
+                })
+
+            if is_sq and i % 2 == 0:
+                # Нашли золотую форму на чётном шаге
+                s_val = s
+                self.log_step(
+                    f"Фаза 1: найдена золотая форма (k={k}, итерация {i})",
+                    {
+                        "message": (
+                            f"Дискриминант D = k·n = {k}·{n} = {D}\n"
+                            f"⌊√D⌋ = {D_sqrt}\n\n"
+                            f"На итерации i={i} (чётной):\n"
+                            f"  Q = {Q} = {s_val}²  — полный квадрат!\n"
+                            f"  P = {P}\n"
+                            f"Это «золотая» форма — из неё извлекается делитель.\n"
+                            f"Переходим к фазе 2: обратный ход."
+                        ),
+                        "table": table_data
+                    }
+                )
+
+                # ---- Фаза 2: обратный ход до стабилизации b ----
+                # Инициализация обратного хода из золотой формы
+                P2 = P_new
+                Q2_prev = s_val
+                Q2 = (D - P2 * P2) // s_val
+
+                back_table = []
+                P2_prev = -1
+
+                for j in range(1, max_iter + 1):
+                    q2 = (D_sqrt + P2) // Q2
+                    P2_new = q2 * Q2 - P2
+                    Q2_new = Q2_prev + q2 * (P2 - P2_new)
+
+                    if j <= max_table or P2_new == P2:
+                        back_table.append({
+                            "j": j,
+                            "P": P2,
+                            "Q": Q2,
+                            "q": q2,
+                            "P'": P2_new,
+                            "Q'": Q2_new,
+                        })
+
+                    if P2_new == P2:
+                        # b стабилизировалось
+                        self.log_step(
+                            f"Фаза 2: стабилизация b (j={j})",
+                            {
+                                "message": (
+                                    f"Обратный ход стабилизировался на j={j}:\n"
+                                    f"  P = P' = {P2_new}  (b не меняется)\n"
+                                    f"  Q = {Q2}\n\n"
+                                    f"Вычисляем делитель: d = НОД(Q2, n) = НОД({Q2}, {n})"
+                                ),
+                                "table": back_table
+                            }
+                        )
+                        d = math.gcd(Q2, n)
+                        return d if 1 < d < n else None
+
+                    Q2_prev, Q2, P2 = Q2, Q2_new, P2_new
+
+                # Стабилизация не найдена — пробуем через Q2_prev
+                d = math.gcd(Q2_prev, n)
+                self.log_step("Фаза 2: стабилизация не найдена, пробуем Q_prev", {
+                    "message": f"НОД(Q_prev={Q2_prev}, n={n}) = {d}",
+                    "table": back_table[:max_table]
+                })
+                return d if 1 < d < n else None
+
+            Q_prev, Q, P = Q, Q_new, P_new
+
+        # Золотая форма не найдена за max_iter шагов
+        self.log_step(f"Фаза 1: золотая форма не найдена (k={k})", {
+            "message": (
+                f"За {max_iter} итераций квадратный Q не встретился.\n"
+                f"Пробуем следующий мультипликатор k."
+            ),
+            "table": table_data[:max_table]
+        })
+        return None
+
+    # ------------------------------------------------------------------
+    # Публичный метод факторизации
+    # ------------------------------------------------------------------
+
+    def factorize(self, n: int) -> List[int]:
+        self.clear_logs()
+
+        if n <= 1:
+            return [n]
+        if n % 2 == 0:
+            return sorted([2, n // 2])
+
+        sq = math.isqrt(n)
+        if sq * sq == n:
+            self.log_step("Точный квадрат", {
+                "message": f"n = {sq}²  →  делители {sq} × {sq}"
+            })
+            return sorted([sq, sq])
+
+        if is_prime(n):
+            self.log_step("Число простое", {
+                "message": f"n = {n} — простое (тест Миллера–Рабина)."
+            })
+            return [n]
+
+        self.log_step("Запуск: SQUFOF (метод квадратичных форм Шенкса)", {
+            "message": (
+                f"n = {n} ({n.bit_length()} бит)\n"
+                f"SQUFOF — самый быстрый экспоненциальный алгоритм факторизации.\n"
+                f"Сложность: O(n^(1/4)) по времени, O(1) по памяти.\n\n"
+                f"Идея: в цикле редуцированных бинарных квадратичных форм\n"
+                f"с дискриминантом D = k·n ищем форму (P, Q), где Q — полный квадрат s².\n"
+                f"Это «золотая» форма. Из неё обратным ходом извлекается делитель.\n\n"
+                f"Форма (a,b,c): ax²+bxy+cy², дискриминант D = b²−4ac.\n"
+                f"Кодируем парой (P, Q): b = 2P, a·c = (P²−D)/4.\n"
+                f"Редукция: q = ⌊(⌊√D⌋+P)/Q⌋,  P' = q·Q−P,  Q' = Q_prev + q·(P−P')\n\n"
+                f"Перебираем мультипликаторы k = 1, 3, 5, ..."
+            )
+        })
+
+        # Мультипликаторы Кнут-Шрёппель (улучшают шансы нахождения)
+        multipliers = [1, 3, 5, 7, 11, 3*5, 3*7, 5*7, 3*11, 5*11]
+        max_iter = max(1000, int(n ** 0.25) * 3)
+
+        for k in multipliers:
+            # D = k*n должно быть ≡ 0 или 1 (mod 4)
+            D = k * n
+            if D % 4 not in (0, 1):
+                continue
+
+            self.log_step(f"Попытка с мультипликатором k={k}", {
+                "message": (
+                    f"D = {k}·{n} = {D}\n"
+                    f"D mod 4 = {D % 4}  {'✓' if D % 4 in (0,1) else '✗ (пропускаем)'}\n"
+                    f"⌊√D⌋ = {math.isqrt(D)}\n"
+                    f"Максимум итераций фазы 1: {max_iter}"
+                )
+            })
+
+            divisor = self._squfof_attempt(n, k, max_iter)
+
+            if divisor is not None and 1 < divisor < n:
+                q = n // divisor
+                self.log_step("Факторизация завершена", {
+                    "message": (
+                        f"Делитель найден при k={k}.\n"
+                        f"{n} = {divisor} × {q}"
+                    )
+                })
+                return sorted([divisor, q])
+
+        self.log_step("Алгоритм не справился", {
+            "message": (
+                f"Ни один мультипликатор не дал нетривиального делителя.\n"
+                f"Возможные причины:\n"
+                f"  • n слишком велико для данного числа итераций\n"
+                f"  • n — простое (но тест Миллера–Рабина должен был это поймать)\n"
+                f"Рекомендуется использовать квадратичное решето."
+            )
+        })
+        return [n]

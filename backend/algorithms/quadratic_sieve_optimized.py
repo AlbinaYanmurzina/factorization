@@ -126,13 +126,15 @@ class QuadraticSieveOptimized(FactorizationAlgorithm):
         cols = len(matrix[0])
         M = [matrix[i] + [1 if i == j else 0 for j in range(rows)] for i in range(rows)]
 
+        display_matrix = [row[:30] for row in matrix[:30]]
         self.log_step("Этап 3: Метод Гаусса над GF(2)", {
             "message": (
                 f"Матрица {rows} × {cols}: строки — гладкие числа, столбцы — простые из FB.\n"
                 f"Элемент [i][j] = степень j-го простого в Q(xᵢ) mod 2.\n"
                 f"Приводим к ступенчатому виду: XOR строк вместо сложения.\n"
                 f"Нулевые строки в результате = линейные зависимости = кандидаты на делитель."
-            )
+            ),
+            "matrix_data": display_matrix
         })
 
         pivot_row = 0

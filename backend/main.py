@@ -3,6 +3,10 @@ from schemas.models import FactorizeRequest, FactorizeResponse
 
 from algorithms.pollard import PollardRho
 from algorithms.pollard_p1 import PollardP1
+from algorithms.fermat import FermatFactorization
+from algorithms.williams_p1 import WilliamsP1
+from algorithms.cfrac import CFRAC
+from algorithms.squfof import SQUFOF
 from algorithms.quadratic_sieve_basic import QuadraticSieveBasic
 from algorithms.quadratic_sieve_optimized import QuadraticSieveOptimized
 from algorithms.quadratic_sieve_auto import QuadraticSieveAuto
@@ -18,6 +22,10 @@ app = FastAPI(title="ВКР: API Факторизации")
 ALGO_MAP = {
     "pollard_rho":       PollardRho,
     "pollard_p1":        PollardP1,
+    "fermat":            FermatFactorization,
+    "williams_p1":       WilliamsP1,
+    "cfrac":             CFRAC,
+    "squfof":            SQUFOF,
     "qs_basic":          QuadraticSieveBasic,
     "qs_optimized":      QuadraticSieveOptimized,
     "qs_auto":           QuadraticSieveAuto,

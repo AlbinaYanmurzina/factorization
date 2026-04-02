@@ -96,6 +96,8 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
         # Расширяем матрицу единичной — для отслеживания комбинаций строк
         M = [matrix[i] + [1 if i == j else 0 for j in range(rows)] for i in range(rows)]
 
+        # Передаём срез матрицы (макс 30×30) для визуализации heatmap
+        display_matrix = [row[:30] for row in matrix[:30]]
         self.log_step("Этап 3: Линейная алгебра над GF(2)", {
             "message": (
                 f"Матрица размером {rows} × {cols} (строки = гладкие числа, столбцы = простые из FB).\n"
@@ -103,7 +105,8 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
                 f"Цель: найти подмножество строк с нулевой суммой mod 2 —\n"
                 f"это даст x² ≡ y² (mod n), откуда НОД(x−y, n) — делитель.\n"
                 f"Метод: Гаусс над GF(2) с расширенной матрицей."
-            )
+            ),
+            "matrix_data": display_matrix
         })
 
         pivot_row = 0

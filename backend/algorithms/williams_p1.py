@@ -1,0 +1,234 @@
+# backend/algorithms/williams_p1.py
+import math
+from typing import List, Tuple
+from .base import FactorizationAlgorithm
+from .math_utils import is_prime, generate_primes
+
+
+class WilliamsP1(FactorizationAlgorithm):
+    """
+    (p+1)-метод Вильямса (раздел 3.3).
+
+    Идея: аналог (p−1)-метода Полларда, но работает когда у делителя p
+    число (p+1) является B-гладким.
+
+    Использует последовательности Лукаса V_k(P, Q=1):
+        V_0 = 2,  V_1 = P,  V_k = P·V_{k-1} − V_{k-2}  (mod n)
+
+    Свойство: если p | n и (p+1) | M, то V_M ≡ 2 (mod p),
+    значит p | НОД(V_M − 2, n).
+
+    Быстрое вычисление V_k использует удвоение индекса:
+        V_{2k}   = V_k² − 2          (mod n)
+        V_{2k+1} = V_k · V_{k+1} − P (mod n)
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    # ------------------------------------------------------------------
+    # Арифметика последовательностей Лукаса
+    # ------------------------------------------------------------------
+
+    def _lucas_double(self, Vk: int, Vk1: int, P: int, n: int) -> Tuple[int, int]:
+        """Переход (V_k, V_{k+1}) → (V_{2k}, V_{2k+1})."""
+        V2k  = (Vk * Vk - 2) % n
+        V2k1 = (Vk * Vk1 - P) % n
+        return V2k, V2k1
+
+    def _lucas_add1(self, Vk: int, Vk1: int, P: int, n: int) -> Tuple[int, int]:
+        """Переход (V_k, V_{k+1}) → (V_{k+1}, V_{k+2})."""
+        Vk2 = (P * Vk1 - Vk) % n
+        return Vk1, Vk2
+
+    def _lucas_pow(self, m: int, P: int, n: int) -> int:
+        """
+        Вычисляет V_m(P, 1) mod n методом бинарного возведения
+        (ladder-алгоритм на парах (V_k, V_{k+1})).
+        Возвращает V_m mod n.
+        """
+        if m == 0:
+            return 2
+        if m == 1:
+            return P % n
+
+        # Бинарное представление m (без старшего бита)
+        bits = m.bit_length() - 2  # индекс второго старшего бита
+
+        Vk, Vk1 = 2, P % n  # (V_0, V_1)
+
+        # Стартуем со старшего бита (он всегда 1, пропускаем)
+        # Инициализируем парой (V_1, V_2)
+        Vk, Vk1 = P % n, (P * P - 2) % n  # (V_1, V_2)
+
+        for i in range(bits, -1, -1):
+            if (m >> i) & 1:
+                # бит = 1: (V_k, V_{k+1}) → (V_{2k+1}, V_{2k+2})
+                Vk, Vk1 = self._lucas_double(Vk, Vk1, P, n)
+                Vk, Vk1 = self._lucas_add1(Vk, Vk1, P, n)
+            else:
+                # бит = 0: (V_k, V_{k+1}) → (V_{2k}, V_{2k+1})
+                Vk, Vk1 = self._lucas_double(Vk, Vk1, P, n)
+
+        return Vk
+
+    # ------------------------------------------------------------------
+    # Основной шаг алгоритма
+    # ------------------------------------------------------------------
+
+    def _p1_step(self, n: int, P: int, B: int) -> int:
+        """
+        Один проход (p+1)-метода с параметром P и границей B.
+        Возвращает нетривиальный делитель или n при неудаче.
+        """
+        primes = generate_primes(B)
+
+        self.log_step("Инициализация (p+1)-метода Вильямса", {
+            "message": (
+                f"Число n = {n}, параметр P = {P}, граница гладкости B = {B}\n"
+                f"Идея: если p | n и (p+1) является B-гладким,\n"
+                f"то V_M ≡ 2 (mod p), где M = НОК всех простых степеней ≤ B.\n"
+                f"Значит p | НОД(V_M − 2, n).\n"
+                f"Используем последовательности Лукаса V_k(P, Q=1):\n"
+                f"  V_0 = 2,  V_1 = P,  V_k = P·V_{{k-1}} − V_{{k-2}}\n"
+                f"Быстрое вычисление: бинарный ladder-алгоритм на парах (V_k, V_{{k+1}}).\n"
+                f"Простых в базе: {len(primes)} (до {primes[-1] if primes else '—'})"
+            )
+        })
+
+        # Начинаем с V = P (т.е. V_1)
+        V = P % n
+        table_data = []
+        log_interval = max(1, len(primes) // 8)
+
+        for idx, p in enumerate(primes):
+            # Максимальная степень p^k ≤ B
+            p_pow = p
+            while p_pow * p <= B:
+                p_pow *= p
+
+            V_prev = V
+            # Применяем V ← V_{p^k}(V, 1) mod n
+            # Используем _lucas_pow с начальным значением V как «P»
+            V = self._lucas_pow(p_pow, V, n)
+            d = math.gcd(V - 2, n)
+
+            if idx % log_interval == 0 or (1 < d < n):
+                table_data.append({
+                    "p": p,
+                    "p^k ≤ B": p_pow,
+                    "V_M mod n": V,
+                    "НОД(V−2, n)": d
+                })
+
+            if d == n:
+                # Вырождение: V ≡ 2 (mod n) — слишком рано
+                self.log_step("Вырождение", {
+                    "message": (
+                        f"НОД(V−2, n) = n на простом p={p}.\n"
+                        f"V ≡ 2 (mod n) — цикл замкнулся по всему n, а не по делителю.\n"
+                        f"Причина: неудачный выбор P={P}. Попробуем другой P."
+                    ),
+                    "table": table_data
+                })
+                return n
+
+            if 1 < d < n:
+                self.log_step(f"Промежуточные шаги (всего простых: {len(primes)})", {
+                    "message": (
+                        f"На простом p={p} (степень p^k={p_pow}):\n"
+                        f"V_prev = {V_prev},  V_new = {V}\n"
+                        f"НОД(V−2, n) = НОД({V}−2, {n}) = {d}\n"
+                        f"Нетривиальный делитель найден!"
+                    ),
+                    "table": table_data
+                })
+                self.log_step("Найден делитель", {
+                    "message": (
+                        f"(p+1) оказался B-гладким при B={B}, P={P}.\n"
+                        f"Делитель: {d}"
+                    )
+                })
+                return d
+
+        d = math.gcd(V - 2, n)
+        if 1 < d < n:
+            self.log_step("Успех на финальном шаге", {
+                "message": (
+                    f"НОД(V_M − 2, n) = {d} после обработки всех простых до B={B}."
+                ),
+                "table": table_data
+            })
+            return d
+
+        self.log_step(f"Неудача при B={B}, P={P}", {
+            "message": (
+                f"НОД(V_M − 2, n) = {d} — тривиальный результат.\n"
+                f"Вероятная причина: (p+1) содержит простой множитель > B,\n"
+                f"или выбранный P не подходит для данного делителя.\n"
+                f"Решение: сменить P или увеличить B."
+            ),
+            "table": table_data
+        })
+        return n
+
+    # ------------------------------------------------------------------
+    # Публичный метод факторизации
+    # ------------------------------------------------------------------
+
+    def factorize(self, n: int) -> List[int]:
+        self.clear_logs()
+
+        if n <= 1:
+            return [n]
+        if n % 2 == 0:
+            self.log_step("Тривиальный делитель", {"message": f"{n} чётное → делитель 2"})
+            return sorted([2, n // 2])
+        if is_prime(n):
+            self.log_step("Число простое", {
+                "message": f"n = {n} — простое (тест Миллера–Рабина). Факторизация не требуется."
+            })
+            return [n]
+
+        self.log_step("Запуск: (p+1)-метод Вильямса", {
+            "message": (
+                f"n = {n} ({n.bit_length()} бит)\n"
+                f"(p+1)-метод — аналог (p−1)-метода Полларда.\n"
+                f"Работает, когда у делителя p число (p+1) является B-гладким\n"
+                f"(раскладывается только на малые простые ≤ B).\n"
+                f"Вместо обычного возведения в степень используются\n"
+                f"последовательности Лукаса V_k(P, Q=1).\n"
+                f"Стратегия: перебираем P ∈ {{3, 5, 7}} и B ∈ {{100, 1000, 10000}}."
+            )
+        })
+
+        # Перебираем комбинации (P, B)
+        attempts = [
+            (3,  100),
+            (3,  1000),
+            (5,  1000),
+            (3,  10000),
+            (7,  10000),
+        ]
+
+        for P, B in attempts:
+            self.log_step(f"Попытка: P={P}, B={B}", {
+                "message": f"Запускаем (p+1)-шаг с P={P}, B={B}."
+            })
+            divisor = self._p1_step(n, P, B)
+
+            if 1 < divisor < n:
+                factors = sorted([divisor, n // divisor])
+                self.log_step("Факторизация завершена", {
+                    "message": f"{n} = {factors[0]} × {factors[1]}"
+                })
+                return factors
+
+        self.log_step("Алгоритм не справился", {
+            "message": (
+                f"Ни одна комбинация (P, B) не дала нетривиального делителя.\n"
+                f"Вероятно, оба простых множителя имеют негладкое (p+1).\n"
+                f"Рекомендуется использовать ρ-метод или квадратичное решето."
+            )
+        })
+        return [n]

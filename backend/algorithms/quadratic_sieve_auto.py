@@ -74,17 +74,33 @@ class QuadraticSieveAuto(QuadraticSieveOptimized):
             # Используем методы из базового класса Optimized, но с новыми B и M
             factor_base = self._get_factor_base(n, B)
             required_smooth = len(factor_base) + 5
-            
-            # Нам нужно изменить вызов метода сита, 
-            # чтобы он принимал кастомный M
-            # Для этого в QuadraticSieveOptimized метод _sieve_and_find_smooth 
-            # должен принимать M как аргумент.
             smooth_numbers = self._sieve_and_find_smooth_custom_m(n, factor_base, required_smooth, M)
 
             matrix_mod2 = [[exp % 2 for exp in sn['exponents']] for sn in smooth_numbers]
+            rows, cols = len(matrix_mod2), len(matrix_mod2[0])
+
+            display_matrix = [row[:30] for row in matrix_mod2[:30]]
+            self.log_step("Этап 3: Метод Гаусса над GF(2)", {
+                "message": (
+                    f"Матрица {rows} × {cols}: строки — гладкие числа, столбцы — простые из FB.\n"
+                    f"Элемент [i][j] = степень j-го простого в Q(xᵢ) mod 2 (0 = чётная, 1 = нечётная).\n"
+                    f"Приводим к ступенчатому виду: XOR строк вместо обычного сложения.\n"
+                    f"Нулевые строки = линейные зависимости = подмножества, чьё произведение — полный квадрат."
+                ),
+                "matrix_data": display_matrix
+            })
+
             dependencies = self._gauss_elimination_gf2(matrix_mod2)
 
-            for dep in dependencies:
+            self.log_step("Этап 4: Проверка зависимостей", {
+                "message": (
+                    f"Найдено {len(dependencies)} зависимостей.\n"
+                    f"Для каждой: X = ∏xᵢ mod n,  Y = ∏pⱼ^(eⱼ/2) mod n\n"
+                    f"Ищем НОД(X−Y, n) ∈ (1, n)."
+                )
+            })
+
+            for idx, dep in enumerate(dependencies):
                 X = 1
                 exponents_sum = [0] * len(factor_base)
                 for i, is_used in enumerate(dep):
@@ -95,18 +111,32 @@ class QuadraticSieveAuto(QuadraticSieveOptimized):
                 Y = 1
                 for i, fb in enumerate(factor_base):
                     Y = (Y * pow(fb['p'], exponents_sum[i] // 2, n)) % n
-                
+
                 d = math.gcd(abs(X - Y), n)
+                self.log_step(f"Зависимость #{idx + 1}", {
+                    "message": (
+                        f"Использовано {sum(dep)} гладких чисел.\n"
+                        f"X = {X}, Y = {Y}\n"
+                        f"НОД(|X−Y|, n) = {d}\n"
+                        f"{'✓ Нетривиальный делитель!' if 1 < d < n else '✗ Тривиальный, продолжаем.'}"
+                    )
+                })
                 if 1 < d < n:
-                    self.log_step("Этап 4: Успех!", {
-                        "message": f"X={X}, Y={Y}. НОД = {d}"
+                    self.log_step("Факторизация завершена", {
+                        "message": f"{n} = {d} × {n // d}"
                     })
                     return sorted([d, n // d])
 
-            self.log_step("Провал", {"message": "Попробуйте увеличить коэффициенты в расчете параметров."})
+            self.log_step("Провал", {
+                "message": (
+                    "Все зависимости дали тривиальные делители.\n"
+                    "Попробуйте увеличить коэффициенты α в расчёте параметров."
+                )
+            })
 
         except Exception as e:
             self.log_step("Ошибка", {"message": str(e)})
+
 
         return [n]
 

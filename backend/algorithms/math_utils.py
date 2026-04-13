@@ -1,22 +1,18 @@
 """
-math_utils.py — общие математические утилиты для алгоритмов факторизации.
+backend/algorithms/math_utils.py
 
-Где используется:
-  is_prime         → fermat.py, pollard.py, squfof.py, cfrac.py,
-                     pollard_p1.py, williams_p1.py,
-                     quadratic_sieve_basic/optimized/lpv/mpqs/mpqs_parallel/auto.py,
-                     tests/test_math.py
+Общие математические утилиты для алгоритмов факторизации.
 
-  generate_primes  → cfrac.py, pollard_p1.py, williams_p1.py,
-                     quadratic_sieve_basic/optimized/lpv/mpqs/mpqs_parallel.py,
-                     tests/test_math.py
+Содержит базовые математические функции, используемые всеми алгоритмами:
+- is_prime: Вероятностный тест простоты Миллера-Рабина
+- generate_primes: Решето Эратосфена для генерации простых чисел
+- legendre_symbol: Символ Лежандра для проверки квадратичных вычетов
+- tonelli_shanks: Алгоритм Тонелли-Шенкса для извлечения квадратного корня mod p
 
-  legendre_symbol  → cfrac.py,
-                     quadratic_sieve_basic/optimized/lpv/mpqs/mpqs_parallel.py,
-                     tests/test_math.py
+Эти функции являются строительными блоками для реализации алгоритмов
+из учебного пособия (главы 3 и 6).
 
-  tonelli_shanks   → quadratic_sieve_optimized/lpv/mpqs/mpqs_parallel.py,
-                     tests/test_math.py
+Где используется каждая функция подробно описано в комментариях к ней.
 """
 
 import random

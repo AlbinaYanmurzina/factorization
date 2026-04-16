@@ -1,5 +1,5 @@
 import pytest
-from backend.algorithms.math_utils import is_prime, generate_primes, legendre_symbol, tonelli_shanks
+from backend.algorithms.math_utils import is_prime, generate_primes, legendre_symbol
 
 def test_is_prime():
     assert is_prime(2) == True
@@ -19,16 +19,3 @@ def test_legendre_symbol():
     # Нет такого x, что x^2 = 5 mod 7 -> 5 это невычет
     assert legendre_symbol(5, 7) == -1
     assert legendre_symbol(14, 7) == 0
-
-def test_tonelli_shanks():
-    # Решаем x^2 ≡ 10 (mod 13). 
-    # Ответы: 6 (т.к. 36 = 13*2 + 10) и 13 - 6 = 7 (т.к. 49 = 13*3 + 10)
-    root = tonelli_shanks(10, 13)
-    assert root in (6, 7)
-    
-    # Решаем x^2 ≡ 56 (mod 101)
-    root2 = tonelli_shanks(56, 101)
-    assert (root2 * root2) % 101 == 56
-
-    # Проверка на отсутствие решения
-    assert tonelli_shanks(5, 7) is None

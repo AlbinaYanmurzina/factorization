@@ -53,13 +53,8 @@ def generate_semiprime(bits: int) -> int:
 ALGO_LIST = [
     ("ρ-метод Полларда (разд. 3.4)",                        "pollard_rho"),
     ("(p-1)-метод Полларда (разд. 3.2)",                    "pollard_p1"),
-    ("Алгоритм Диксона (Basic QS, разд. 6.1)",              "qs_basic"),
+    ("Алгоритм Диксона (разд. 6.1)",              "qs_basic"),
 ]
-
-# Алгоритмы, которые слишком медленны на больших числах
-SLOW_ABOVE_BITS = {
-    "qs_basic": 32,
-}
 
 TIMEOUT_MS = 30_000  # считаем тайм-аут если время > 30 с
 
@@ -80,7 +75,7 @@ st.divider()
 st.sidebar.header("Настройки эксперимента")
 
 min_bits = st.sidebar.slider("Минимальная разрядность (бит)", 16, 60, 20, step=2)
-max_bits = st.sidebar.slider("Максимальная разрядность (бит)", 16, 60, 40, step=2)
+max_bits = st.sidebar.slider("Максимальная разрядность (бит)", 16, 100, 40, step=2)
 step_bits = st.sidebar.slider("Шаг разрядности (бит)", 2, 8, 4, step=2)
 runs_per_bit = st.sidebar.slider("Замеров на точку графика", 1, 7, 3)
 
@@ -122,10 +117,6 @@ if run_btn:
                 step_counter / total_steps,
                 text=f"{alg_name} @ {bit} бит ({step_counter}/{total_steps})"
             )
-
-            if alg_key in SLOW_ABOVE_BITS and bit > SLOW_ABOVE_BITS[alg_key]:
-                # Пропускаем — слишком медленно
-                continue
 
             for num in test_numbers:
                 try:
@@ -176,10 +167,7 @@ if run_btn:
     ]
 
     # Экспоненциальные — сплошная, субэкспоненциальные — штрих
-    SUBEXP_KEYS = {
-        "cfrac", "qs_basic", "qs_optimized", "qs_auto",
-        "qs_lpv", "qs_mpqs", "qs_mpqs_parallel",
-    }
+    SUBEXP_KEYS = {"qs_basic"}
     LINE_DASH = {k: "dash" for k in SUBEXP_KEYS}  # субэксп — штрих
 
     fig = go.Figure()
@@ -281,7 +269,7 @@ else:
         groups_table = [
             {"Алгоритм": "ρ-метод Полларда", "Сложность": "O(n^{1/4})", "Класс": "Экспоненциальный"},
             {"Алгоритм": "(p-1)-метод Полларда", "Сложность": "O(n^{1/2})", "Класс": "Экспоненциальный"},
-            {"Алгоритм": "Алгоритм Диксона (QS Basic)", "Сложность": "L[1/2, c]", "Класс": "Субэкспоненциальный"},
+            {"Алгоритм": "Алгоритм Диксона", "Сложность": "L[1/2, c]", "Класс": "Субэкспоненциальный"},
         ]
         st.dataframe(pd.DataFrame(groups_table), use_container_width=True, hide_index=True)
 
@@ -292,10 +280,10 @@ else:
 |---|---|
 | Поллард ρ | O(n^{1/4}) |
 | Поллард p-1 | O(n^{1/2}) |
-| QS Basic | L[1/2, c] |
+| Алгоритм Диксона | L[1/2, c] |
 
-**Как читать график:**
-- Сплошные линии — экспоненциальные алгоритмы
-- Штриховые линии — субэкспоненциальные
+**Обозначение:**
+- Сплошные линии — экспоненциальный алгоритм
+- Штриховые линии — субэкспоненциальный алгоритм
         """)
 

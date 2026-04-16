@@ -21,7 +21,7 @@ from algorithms.pollard import PollardRho              # 3.4. ρ-метод По
 from algorithms.pollard_p1 import PollardP1            # 3.2. (p-1)-метод Полларда
 
 # Импорт алгоритмов из главы 6 учебного пособия (метод квадратичного решета)
-from algorithms.quadratic_sieve_basic import QuadraticSieveBasic          # 6.1. Алгоритм Диксона (QS Basic)
+from algorithms.quadratic_sieve_basic import QuadraticSieveBasic          # 6.1. Алгоритм Диксона 
 
 import time
 import asyncio
@@ -35,7 +35,7 @@ app = FastAPI(title="ВКР: API Факторизации")
 ALGO_MAP = {
     "pollard_rho":       PollardRho,           # ρ-метод Полларда (раздел 3.4)
     "pollard_p1":        PollardP1,            # (p-1)-метод Полларда (раздел 3.2)
-    "qs_basic":          QuadraticSieveBasic,  # Алгоритм Диксона / QS Basic (раздел 6.1)
+    "qs_basic":          QuadraticSieveBasic,  # Алгоритм Диксона (раздел 6.1)
 }
 
 # Таймаут выполнения факторизации в секундах

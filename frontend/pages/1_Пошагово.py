@@ -9,30 +9,21 @@ st.title("Пошаговая визуализация алгоритма")
 
 # Формулы для каждого типа шага
 STEP_LATEX = {
+    # ρ-метод Полларда
+    "инициализац": r"f(x) = (x^2 + c) \bmod n",
+    "итерац": r"\gcd(|x - y|,\; n)",
+    
+    # (p-1)-метод Полларда
+    "p−1": r"a^M \equiv 1 \pmod{p} \;\Rightarrow\; p \mid \gcd(a^M - 1,\; n)",
+    "p-1": r"a^M \equiv 1 \pmod{p} \;\Rightarrow\; p \mid \gcd(a^M - 1,\; n)",
+    
+    # Алгоритм Диксона (QS Basic)
     "факторная база": r"\left(\frac{n}{p}\right) = 1",
     "гладк": r"Q(x) = x^2 - n",
     "гаусс": r"Ax = 0 \pmod{2}",
     "зависимост": r"\gcd(X - Y,\; n)",
-    "cfrac": r"A_k^2 \equiv (-1)^k \cdot d_k \pmod{n}",
-    "цепная дробь": r"A_k^2 \equiv Q_k \pmod{n}",
     "просеивани": r"\text{sieve}[i] \mathrel{+}= \log_2 p \quad \text{если } p \mid Q(x_i)",
     "полином": r"Q(x) = ax^2 + 2bx + c, \quad a = t^2",
-    "инициализац": r"f(x) = (x^2 + c) \bmod n",
-    "итерац": r"\gcd(|x - y|,\; n)",
-    "лукас": r"V_k = P \cdot V_{k-1} - V_{k-2} \pmod{n}",
-    "вильямс": r"\gcd(V_M - 2,\; n)",
-    "p+1": r"\gcd(V_M - 2,\; n)",
-    "p−1": r"a^M \equiv 1 \pmod{p} \;\Rightarrow\; p \mid \gcd(a^M - 1,\; n)",
-    "p-1": r"a^M \equiv 1 \pmod{p} \;\Rightarrow\; p \mid \gcd(a^M - 1,\; n)",
-    "золотая": r"Q_i = s^2 \;\Rightarrow\; \gcd(Q_{\text{prev}},\; n)",
-    "squfof": r"D = kn,\quad q = \left\lfloor\frac{\lfloor\sqrt{D}\rfloor + P}{Q}\right\rfloor",
-    "квадратичн": r"n = x^2 - y^2 = (x-y)(x+y)",
-    "ферма": r"w = x^2 - n = y^2",
-    "представлен": r"n = x^2 - y^2,\quad p = x - y,\quad q = x + y",
-    "l-нотац": r"L(n,\tfrac{1}{2}) = \exp\!\left(\sqrt{\ln n \cdot \ln\ln n}\right)",
-    "параметр b": r"B = \exp\!\left(0.5\sqrt{\ln n \cdot \ln\ln n}\right)",
-    "выбор параметра": r"B = \exp\!\left(0.5\sqrt{\ln n \cdot \ln\ln n}\right)",
-    "расчёт параметр": r"B = L(n,\tfrac{1}{2})^{\alpha}",
 }
 
 def get_step_latex(step_name: str) -> str | None:
@@ -117,7 +108,7 @@ with st.container():
             [
                 "ρ-метод Полларда (разд. 3.4)",
                 "(p-1)-метод Полларда (разд. 3.2)",
-                "Алгоритм Диксона (Basic QS, разд. 6.1)",
+                "Алгоритм Диксона (разд. 6.1)",
             ]
         )
 
@@ -125,7 +116,7 @@ with st.container():
 algo_map = {
     "ρ-метод Полларда (разд. 3.4)": "pollard_rho",
     "(p-1)-метод Полларда (разд. 3.2)": "pollard_p1",
-    "Алгоритм Диксона (Basic QS, разд. 6.1)": "qs_basic",
+    "Алгоритм Диксона (разд. 6.1)": "qs_basic",
 }
 
 IS_QS_OR_CFRAC = {

@@ -99,28 +99,9 @@ ALGO_LIST = [
     ("Алгоритм Диксона (Basic QS, разд. 6.1)",              "qs_basic"),
 ]
 
-# Группы алгоритмов для быстрого выбора
-ALGO_GROUPS: dict[str, list[str]] = {
-    "Все алгоритмы": [k for _, k in ALGO_LIST],
-
-    # По классу сложности
-    "Экспоненциальные  O(n^c)": [
-        "pollard_rho", "pollard_p1",
-    ],
-    "Субэкспоненциальные  L[1/2, c]": [
-        "qs_basic",
-    ],
-
-    # По методу
-    "Методы на основе НОД": [
-        "pollard_rho", "pollard_p1",
-    ],
-}
-
 # Алгоритмы, которые слишком медленны на больших числах
 SLOW_ABOVE_BITS = {
     "qs_basic": 32,
-    "fermat":   32,
 }
 
 TIMEOUT_MS = 30_000  # считаем тайм-аут если время > 30 с
@@ -147,37 +128,16 @@ step_bits = st.sidebar.slider("Шаг разрядности (бит)", 2, 8, 4,
 runs_per_bit = st.sidebar.slider("Замеров на точку графика", 1, 7, 3)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Алгоритмы")
+st.sidebar.subheader("Выбор алгоритмов")
 
-# Пресет группы
-group_name = st.sidebar.selectbox(
-    "Группа / пресет:",
-    list(ALGO_GROUPS.keys()),
-    index=0,
-)
-preset_keys = set(ALGO_GROUPS[group_name])
-
-# Описания групп
-GROUP_DESC = {
-    "Все алгоритмы": "Все 3 реализованных алгоритма.",
-    "Экспоненциальные  O(n^c)": "Сложность растёт как степень n: O(n^{1/4}) или O(n^{1/2}). Практичны до ~40–50 бит.",
-    "Субэкспоненциальные  L[1/2, c]": "Сложность L[1/2, c] = exp(c·√(ln n · ln ln n)) — быстрее экспоненты, медленнее полинома. Основа современной криптографии.",
-    "Методы на основе НОД": "Ищут делитель через НОД: ρ-метод (случайный цикл), p−1 (гладкость делителя).",
-}
-st.sidebar.caption(GROUP_DESC.get(group_name, ""))
-
-st.sidebar.markdown("Тонкая настройка:")
 selected_algos = []
 for name, key in ALGO_LIST:
-    checked = key in preset_keys
-    if st.sidebar.checkbox(name, value=checked, key=f"cb_{key}"):
+    if st.sidebar.checkbox(name, value=True, key=f"cb_{key}"):
         selected_algos.append((name, key))
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Отображение")
-log_scale = st.sidebar.toggle("Логарифмическая шкала (ось Y)", value=True)
 show_theory = st.sidebar.toggle("Теоретические кривые O(f(n))", value=True)
-show_errorbars = st.sidebar.toggle("Планки погрешности (стандартное отклонение)", value=True)
 
 run_btn = st.sidebar.button("🚀 Запустить тест", type="primary", use_container_width=True)
 
@@ -292,15 +252,6 @@ if run_btn:
         trace_name = f"{alg_name} [{complexity}]"
         line_dash = LINE_DASH.get(alg_key, "solid")
 
-        error_y = dict(
-            type="data",
-            array=y_err,
-            visible=show_errorbars,
-            color=color,
-            thickness=1.5,
-            width=4,
-        ) if show_errorbars else None
-
         fig.add_trace(go.Scatter(
             x=x_vals,
             y=y_vals,
@@ -308,7 +259,6 @@ if run_btn:
             name=trace_name,
             line=dict(color=color, width=2, dash=line_dash),
             marker=dict(size=7, color=color),
-            error_y=error_y,
             hovertemplate=(
                 f"<b>{alg_name}</b><br>"
                 "Разрядность: %{x} бит<br>"
@@ -343,8 +293,7 @@ if run_btn:
 
     fig.update_layout(
         xaxis_title="Разрядность числа (бит)",
-        yaxis_title="Среднее время (мс)" + (" [лог. шкала]" if log_scale else ""),
-        yaxis_type="log" if log_scale else "linear",
+        yaxis_title="Среднее время (мс)",
         hovermode="x unified",
         legend=dict(
             orientation="v",
@@ -416,11 +365,11 @@ else:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("**Группы алгоритмов:**")
+        st.markdown("**Реализованные алгоритмы:**")
         groups_table = [
-            {"Группа": "Экспоненциальные O(n^c)", "Алгоритмы": "ρ-метод Полларда, (p-1)-метод Полларда"},
-            {"Группа": "Субэкспоненциальные L[1/2,c]", "Алгоритмы": "Алгоритм Диксона (QS Basic)"},
-            {"Группа": "Методы на основе НОД", "Алгоритмы": "ρ-метод Полларда, (p-1)-метод Полларда"},
+            {"Алгоритм": "ρ-метод Полларда", "Сложность": "O(n^{1/4})", "Класс": "Экспоненциальный"},
+            {"Алгоритм": "(p-1)-метод Полларда", "Сложность": "O(n^{1/2})", "Класс": "Экспоненциальный"},
+            {"Алгоритм": "Алгоритм Диксона (QS Basic)", "Сложность": "L[1/2, c]", "Класс": "Субэкспоненциальный"},
         ]
         st.dataframe(pd.DataFrame(groups_table), use_container_width=True, hide_index=True)
 
@@ -437,6 +386,5 @@ else:
 - Сплошные линии — экспоненциальные алгоритмы
 - Штриховые линии — субэкспоненциальные
 - Пунктирные линии — теоретические кривые O(f(n))
-- Планки погрешности — стандартное отклонение по повторениям
         """)
 

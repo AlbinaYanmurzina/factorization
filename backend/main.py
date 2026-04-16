@@ -19,18 +19,9 @@ from schemas.models import FactorizeRequest, FactorizeResponse
 # Импорт алгоритмов из главы 3 учебного пособия (простые алгоритмы факторизации)
 from algorithms.pollard import PollardRho              # 3.4. ρ-метод Полларда
 from algorithms.pollard_p1 import PollardP1            # 3.2. (p-1)-метод Полларда
-from algorithms.fermat import FermatFactorization      # 3.1. Метод Ферма
-from algorithms.williams_p1 import WilliamsP1          # 3.3. (p+1)-метод Вильямса
-from algorithms.cfrac import CFRAC                     # 3.6. Факторизация непрерывными дробями
-from algorithms.squfof import SQUFOF                   # 3.8. Факторизация квадратичными формами
 
 # Импорт алгоритмов из главы 6 учебного пособия (метод квадратичного решета)
-from algorithms.quadratic_sieve_basic import QuadraticSieveBasic          # 6.1. Алгоритм Диксона
-from algorithms.quadratic_sieve_optimized import QuadraticSieveOptimized  # 6.2. Метод Померанца
-from algorithms.quadratic_sieve_auto import QuadraticSieveAuto            # 6.5. С оценкой сложности
-from algorithms.quadratic_sieve_lpv import QuadraticSieveLPV              # 6.8. Вариация множителя
-from algorithms.quadratic_sieve_mpqs import QuadraticSieveMPQS            # 6.9. С множеством полиномов
-from algorithms.quadratic_sieve_mpqs_parallel import QuadraticSieveMPQSParallel  # 6.9. Параллельная версия
+from algorithms.quadratic_sieve_basic import QuadraticSieveBasic          # 6.1. Алгоритм Диксона (QS Basic)
 
 import time
 import asyncio
@@ -44,16 +35,7 @@ app = FastAPI(title="ВКР: API Факторизации")
 ALGO_MAP = {
     "pollard_rho":       PollardRho,           # ρ-метод Полларда (раздел 3.4)
     "pollard_p1":        PollardP1,            # (p-1)-метод Полларда (раздел 3.2)
-    "fermat":            FermatFactorization,  # Метод Ферма (раздел 3.1)
-    "williams_p1":       WilliamsP1,           # (p+1)-метод Вильямса (раздел 3.3)
-    "cfrac":             CFRAC,                # Факторизация непрерывными дробями (раздел 3.6)
-    "squfof":            SQUFOF,               # Факторизация квадратичными формами (раздел 3.8)
-    "qs_basic":          QuadraticSieveBasic,  # Алгоритм Диксона (раздел 6.1)
-    "qs_optimized":      QuadraticSieveOptimized,  # Метод Померанца (раздел 6.2)
-    "qs_auto":           QuadraticSieveAuto,   # С оценкой сложности (раздел 6.5)
-    "qs_lpv":            QuadraticSieveLPV,    # Вариация множителя (раздел 6.8)
-    "qs_mpqs":           QuadraticSieveMPQS,   # С множеством полиномов (раздел 6.9)
-    "qs_mpqs_parallel":  QuadraticSieveMPQSParallel,  # Параллельная версия (раздел 6.9)
+    "qs_basic":          QuadraticSieveBasic,  # Алгоритм Диксона / QS Basic (раздел 6.1)
 }
 
 # Таймаут выполнения факторизации в секундах

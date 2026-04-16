@@ -33,53 +33,10 @@ def get_system_info() -> dict:
 
 sys_info = get_system_info()
 
-# ── Теоретические кривые сложности ─────────────────────────────────────────
-
-def theoretical_curve(algo_key: str, bits_list: list) -> list | None:
-    """
-    Возвращает список относительных значений теоретической сложности
-    (нормированных к первой точке), или None если кривая не определена.
-    """
-    curves = {
-        # O(n^(1/4)) = O(2^(bits/4))
-        "pollard_rho":  lambda b: 2 ** (b / 4),
-        # O(n^(1/4)) аналогично
-        "squfof":       lambda b: 2 ** (b / 4),
-        # O(n^(1/2)) = O(2^(bits/2))
-        "fermat":       lambda b: 2 ** (b / 2),
-        "pollard_p1":   lambda b: 2 ** (b / 2),
-        "williams_p1":  lambda b: 2 ** (b / 2),
-        # L-нотация: exp(c * sqrt(bits * ln2 * ln(bits * ln2)))
-        "cfrac":        lambda b: math.exp(math.sqrt(b * math.log(2) * math.log(b * math.log(2) + 1))),
-        "qs_basic":     lambda b: math.exp(math.sqrt(b * math.log(2) * math.log(b * math.log(2) + 1))),
-        "qs_optimized": lambda b: math.exp(math.sqrt(b * math.log(2) * math.log(b * math.log(2) + 1))),
-        "qs_auto":      lambda b: math.exp(math.sqrt(b * math.log(2) * math.log(b * math.log(2) + 1))),
-        "qs_lpv":       lambda b: math.exp(math.sqrt(b * math.log(2) * math.log(b * math.log(2) + 1))),
-        "qs_mpqs":      lambda b: math.exp(math.sqrt(b * math.log(2) * math.log(b * math.log(2) + 1))),
-        "qs_mpqs_parallel": lambda b: math.exp(math.sqrt(b * math.log(2) * math.log(b * math.log(2) + 1))),
-    }
-    fn = curves.get(algo_key)
-    if fn is None:
-        return None
-    raw = [fn(b) for b in bits_list]
-    if raw[0] == 0:
-        return None
-    # Нормируем: первая точка = первое реальное ненулевое значение
-    return raw
-
 ALGO_COMPLEXITY_LABEL = {
-    "pollard_rho":      "O(n^{1/4})",
-    "squfof":           "O(n^{1/4})",
-    "fermat":           "O(n^{1/2})",
-    "pollard_p1":       "O(n^{1/2})",
-    "williams_p1":      "O(n^{1/2})",
-    "cfrac":            "L[1/2, c]",
-    "qs_basic":         "L[1/2, c]",
-    "qs_optimized":     "L[1/2, c]",
-    "qs_auto":          "L[1/2, c]",
-    "qs_lpv":           "L[1/2, c]",
-    "qs_mpqs":          "L[1/2, c]",
-    "qs_mpqs_parallel": "L[1/2, c]",
+    "pollard_rho": "O(n^{1/4})",
+    "pollard_p1":  "O(n^{1/2})",
+    "qs_basic":    "L[1/2, c]",
 }
 
 # ── Вспомогательные функции ─────────────────────────────────────────────────
@@ -134,10 +91,6 @@ selected_algos = []
 for name, key in ALGO_LIST:
     if st.sidebar.checkbox(name, value=True, key=f"cb_{key}"):
         selected_algos.append((name, key))
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("Отображение")
-show_theory = st.sidebar.toggle("Теоретические кривые O(f(n))", value=True)
 
 run_btn = st.sidebar.button("🚀 Запустить тест", type="primary", use_container_width=True)
 
@@ -267,30 +220,6 @@ if run_btn:
             ),
         ))
 
-        # Теоретическая кривая
-        if show_theory:
-            theory_raw = theoretical_curve(alg_key, x_vals)
-            if theory_raw and y_vals:
-                # Нормируем: масштабируем теорию к первой реальной точке
-                scale = y_vals[0] / theory_raw[0] if theory_raw[0] != 0 else 1
-                theory_scaled = [v * scale for v in theory_raw]
-
-                fig.add_trace(go.Scatter(
-                    x=x_vals,
-                    y=theory_scaled,
-                    mode="lines",
-                    name=f"{alg_name} (теория)",
-                    line=dict(color=color, width=1.5, dash="dot"),
-                    opacity=0.5,
-                    showlegend=False,
-                    hovertemplate=(
-                        f"<b>{alg_name} — теория {complexity}</b><br>"
-                        "Разрядность: %{x} бит<br>"
-                        "Норм. значение: %{y:.2f}<br>"
-                        "<extra></extra>"
-                    ),
-                ))
-
     fig.update_layout(
         xaxis_title="Разрядность числа (бит)",
         yaxis_title="Среднее время (мс)",
@@ -302,23 +231,6 @@ if run_btn:
         ),
         margin=dict(r=220),
         height=560,
-    )
-
-    # Аннотация: пунктир = теория, стиль линий = класс сложности
-    if show_theory:
-        fig.add_annotation(
-            text="— — пунктир: теоретическая O(f(n))",
-            xref="paper", yref="paper",
-            x=0, y=-0.12,
-            showarrow=False,
-            font=dict(size=11, color="gray"),
-        )
-    fig.add_annotation(
-        text="сплошная = экспоненциальные · штрих = субэкспоненциальные",
-        xref="paper", yref="paper",
-        x=0, y=-0.17,
-        showarrow=False,
-        font=dict(size=11, color="gray"),
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -374,7 +286,7 @@ else:
         st.dataframe(pd.DataFrame(groups_table), use_container_width=True, hide_index=True)
 
     with col2:
-        st.markdown("**Теоретические кривые:**")
+        st.markdown("**Сложность алгоритмов:**")
         st.markdown("""
 | Алгоритм | Сложность |
 |---|---|
@@ -385,6 +297,5 @@ else:
 **Как читать график:**
 - Сплошные линии — экспоненциальные алгоритмы
 - Штриховые линии — субэкспоненциальные
-- Пунктирные линии — теоретические кривые O(f(n))
         """)
 

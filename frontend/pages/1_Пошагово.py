@@ -17,7 +17,7 @@ STEP_LATEX = {
     "p−1": r"a^M \equiv 1 \pmod{p} \;\Rightarrow\; p \mid \gcd(a^M - 1,\; n)",
     "p-1": r"a^M \equiv 1 \pmod{p} \;\Rightarrow\; p \mid \gcd(a^M - 1,\; n)",
     
-    # Алгоритм Диксона (QS Basic)
+    # Алгоритм Диксона 
     "факторная база": r"\left(\frac{n}{p}\right) = 1",
     "гладк": r"Q(x) = x^2 - n",
     "гаусс": r"Ax = 0 \pmod{2}",

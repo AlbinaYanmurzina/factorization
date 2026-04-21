@@ -16,12 +16,11 @@ backend/main.py
 from fastapi import FastAPI, HTTPException
 from schemas.models import FactorizeRequest, FactorizeResponse
 
-# Импорт алгоритмов из главы 3 учебного пособия (простые алгоритмы факторизации)
-from algorithms.pollard import PollardRho              # 3.4. ρ-метод Полларда
-from algorithms.pollard_p1 import PollardP1            # 3.2. (p-1)-метод Полларда
 
-# Импорт алгоритмов из главы 6 учебного пособия (метод квадратичного решета)
-from algorithms.quadratic_sieve_basic import QuadraticSieveBasic          # 6.1. Алгоритм Диксона 
+from algorithms.pollard import PollardRho #  ρ-метод Полларда
+from algorithms.pollard_p1 import PollardP1 # (p-1)-метод Полларда
+
+from algorithms.quadratic_sieve_basic import QuadraticSieveBasic # Алгоритм Диксона 
 
 import time
 import asyncio
@@ -33,14 +32,14 @@ app = FastAPI(title="ВКР: API Факторизации")
 # Ключи используются frontend для выбора алгоритма
 # Значения - классы, реализующие интерфейс FactorizationAlgorithm
 ALGO_MAP = {
-    "pollard_rho":       PollardRho,           # ρ-метод Полларда (раздел 3.4)
-    "pollard_p1":        PollardP1,            # (p-1)-метод Полларда (раздел 3.2)
-    "qs_basic":          QuadraticSieveBasic,  # Алгоритм Диксона (раздел 6.1)
+    "pollard_rho":       PollardRho,           # ρ-метод Полларда 
+    "pollard_p1":        PollardP1,            # (p-1)-метод Полларда 
+    "qs_basic":          QuadraticSieveBasic,  # Алгоритм Диксона
 }
 
 # Таймаут выполнения факторизации в секундах
 # Предотвращает зависание на слишком больших числах
-TIMEOUT_SECONDS = 30.0
+TIMEOUT_SECONDS = 90.0
 
 @app.post("/api/factorize", response_model=FactorizeResponse)
 async def factorize(request: FactorizeRequest):
@@ -61,11 +60,6 @@ async def factorize(request: FactorizeRequest):
     Исключения:
         HTTPException(400): Некорректное число или неизвестный алгоритм
         HTTPException(500): Внутренняя ошибка при выполнении
-    
-    Особенности:
-        - Выполнение в отдельном потоке через asyncio.to_thread()
-        - Таймаут TIMEOUT_SECONDS для предотвращения зависания
-        - Числа передаются как строки для поддержки произвольной длины
     """
     # Валидация входного числа
     try:
@@ -85,10 +79,13 @@ async def factorize(request: FactorizeRequest):
     start_time = time.perf_counter()
 
     try:
-        # Асинхронное выполнение факторизации в отдельном потоке с таймаутом
-        # asyncio.to_thread() позволяет не блокировать event loop FastAPI
+        # Передаём b_override только для квадратичного решета
+        kwargs = {}
+        if request.algorithm == "qs_basic" and request.b_override is not None:
+            kwargs["b_override"] = request.b_override
+
         raw_factors = await asyncio.wait_for(
-            asyncio.to_thread(algo.factorize, n),
+            asyncio.to_thread(algo.factorize, n, **kwargs),
             timeout=TIMEOUT_SECONDS
         )
         # Конвертация множителей в строки для поддержки больших чисел
@@ -118,7 +115,5 @@ async def factorize(request: FactorizeRequest):
 if __name__ == "__main__":
     import uvicorn
     # Запуск сервера для локальной разработки
-    # host="127.0.0.1" - доступ только с локальной машины
-    # port=8000 - стандартный порт для FastAPI
     # reload=True - автоматическая перезагрузка при изменении кода
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

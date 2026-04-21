@@ -14,7 +14,7 @@ Pydantic обеспечивает:
 """
 
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 class FactorizeRequest(BaseModel):
     """
@@ -22,20 +22,13 @@ class FactorizeRequest(BaseModel):
     
     Attributes:
         number (str): Число для факторизации в виде строки.
-                     Строковый формат позволяет передавать числа произвольной длины,
-                     не ограниченные JSON integer (2^53-1 в JavaScript).
-                     Пример: "123456789012345678901234567890"
-        
-        algorithm (str): Идентификатор алгоритма факторизации.
-                        Должен соответствовать ключу из ALGO_MAP в main.py.
-                        Возможные значения:
-                        - "pollard_rho": ρ-метод Полларда (3.4)
-                        - "pollard_p1": (p-1)-метод Полларда (3.2)
-                        - "qs_basic": Алгоритм Диксона (6.1)
-
+        algorithm (str): Идентификатор алгоритма из ALGO_MAP.
+        b_override (Optional[int]): Ручная граница B для квадратичного решета.
+                                    None → автоматический расчёт по L-нотации.
     """
-    number: str  
+    number: str
     algorithm: str
+    b_override: Optional[int] = None
 
 class FactorizeResponse(BaseModel):
     """

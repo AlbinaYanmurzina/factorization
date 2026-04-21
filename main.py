@@ -1,5 +1,5 @@
 """
-Точка входа: запускает FastAPI (бэкенд) и Streamlit (фронтенд) одной командой.
+Точка входа: запускает FastAPI (бэкенд) и Streamlit (фронтенд).
 
     python main.py
 
@@ -45,7 +45,6 @@ def main():
         cwd=os.path.join(ROOT, "backend"),
     )
 
-    # Небольшая пауза, чтобы бэкенд успел подняться до старта фронтенда
     time.sleep(1.5)
 
     frontend = subprocess.Popen(

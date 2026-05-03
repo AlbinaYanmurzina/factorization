@@ -157,6 +157,7 @@ class PollardP1(FactorizationAlgorithm):
             self.log_step(f"Попытка с B = {B}", {
                 "message": f"Запускаем (p−1)-шаг с границей B={B}."
             })
+            
             divisor = self._p1_step(n, B)
             
             # Если нашли нетривиальный делитель

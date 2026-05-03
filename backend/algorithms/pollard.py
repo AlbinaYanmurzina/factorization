@@ -134,12 +134,17 @@ class PollardRho(FactorizationAlgorithm):
         # Очищаем лог от предыдущих запусков
         self.clear_logs()
         
+        
+        # Граничный случай: 0 и 1 не имеют простых делителей
         if n <= 1:
             return [n]
 
+        # Список для накопления найденных простых множителей
         factors = []
+        # Стек заменяет рекурсию: кладём числа, которые ещё нужно разложить
         stack = [n]
 
+                
         self.log_step("Начало факторизации", {
             "message": (
                 f"Раскладываем n = {n} на простые множители.\n"
@@ -150,9 +155,12 @@ class PollardRho(FactorizationAlgorithm):
             )
         })
 
+        # Обрабатываем числа из стека, пока он не опустеет
         while stack:
+            # Извлекаем очередное число для проверки
             current = stack.pop()
             
+            # Если число простое — сразу добавляем в результат
             if is_prime(current):
                 factors.append(current)
                 self.log_step("Простое число найдено", {
@@ -164,11 +172,15 @@ class PollardRho(FactorizationAlgorithm):
                 "message": f"{current} — составное. Запускаем ρ-шаг для поиска делителя."
             })
 
+            # Ищем нетривиальный делитель через алгоритм Флойда (ρ-шаг)
             divisor = self._rho_step(current)
             
             if divisor == current:
-                factors.append(current)
+                # ρ-шаг не нашёл делитель — считаем число неразложимым и добавляем как есть
+                factors.append(current) 
             else:
+                # Нашли делитель: разбиваем current = divisor × quotient
+                # и оба числа отправляем в стек для дальнейшей проверки
                 quotient = current // divisor
                 self.log_step("Разбиение числа", {
                     "message": (
@@ -179,8 +191,11 @@ class PollardRho(FactorizationAlgorithm):
                 stack.append(divisor)
                 stack.append(quotient)
 
+
+        # Сортируем множители по возрастанию для удобного отображения
         factors.sort()
         self.log_step("Факторизация завершена", {
             "message": f"Итоговое разложение: {n} = {' × '.join(map(str, factors))}"
         })
+
         return factors

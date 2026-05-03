@@ -88,10 +88,12 @@ async def factorize(request: FactorizeRequest):
             asyncio.to_thread(algo.factorize, n, **kwargs),
             timeout=TIMEOUT_SECONDS
         )
+
         # Конвертация множителей в строки для поддержки больших чисел
         factors = [str(f) for f in raw_factors]
         # Получение лога шагов из алгоритма
         steps = algo.steps_log
+        
         # Вычисление времени выполнения в миллисекундах
         execution_time = (time.perf_counter() - start_time) * 1000
     except asyncio.TimeoutError:

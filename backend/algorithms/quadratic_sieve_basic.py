@@ -58,9 +58,15 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
         """
         _fb_start = time.perf_counter()
         
-        # Генерируем все простые до B
+        # Генерируем все простые числа до границы B с помощью решета Эратосфена.
+        # Это кандидаты для факторной базы — но не все из них подойдут.
         primes = generate_primes(B)
-        # Включаем только простые p, для которых n является квадратичным вычетом mod p
+
+        # Фильтруем: оставляем только простые p, для которых уравнение x² ≡ n (mod p)
+        # имеет решение. Это проверяется символом Лежандра: (n/p) = 1.
+        # Смысл: если (n/p) ≠ 1, то Q(x) = x² − n никогда не делится на p,
+        # и включать p в базу бессмысленно — гладких чисел с таким p не найти.
+        # p = 2 включаем всегда (символ Лежандра для p=2 не определён стандартно).
         factor_base = [2] + [p for p in primes if p > 2 and legendre_symbol(n, p) == 1]
 
         _fb_ms = (time.perf_counter() - _fb_start) * 1000
@@ -91,15 +97,19 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
         Поиск B-гладких чисел методом пробного деления.
         """
         smooth_numbers = []
+        # Начинаем с x = ⌊√n⌋ + 1, чтобы Q(x) = x² − n было положительным и малым.
+        # Чем ближе x к √n, тем меньше Q(x) и тем выше вероятность гладкости.
         x_start = math.isqrt(n) + 1
         x = x_start
         table_data = []
-        # Масштабируем лимит поиска под размер числа
+        # Масштабируем лимит поиска под размер числа, чтобы не зависнуть на больших n
         max_search = max(500_000, required_count * 5000)
         checked = 0
-        # Множество простых из базы для быстрой проверки делимости
+        # Множество простых из базы для быстрой проверки делимости (не используется напрямую,
+        # но может пригодиться при расширении логики)
         fb_set = set(factor_base)
-        # Наименьшие простые для быстрого предфильтра
+        # Берём только малые простые (≤ 13) для быстрого предфильтра:
+        # если Q(x) не делится ни на одно из них — скорее всего не гладкое, пропускаем
         small_primes = [p for p in factor_base if p <= 13]
 
         self.log_step("Этап 2: Поиск B-гладких чисел (пробное деление)", {
@@ -115,21 +125,31 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
 
         _sieve_start = time.perf_counter()
         while len(smooth_numbers) < required_count and (x - x_start) < max_search:
+            # Вычисляем Q(x) = x² − n. Это число мало относительно n,
+            # поэтому у него высокие шансы разложиться по факторной базе.
             q_x = x * x - n
-            temp_q = q_x
+            temp_q = q_x  # рабочая копия — будем делить на простые из базы
             checked += 1
 
-            # Предфильтр: хотя бы один малый простой должен делить q_x
+            # Быстрый предфильтр: если Q(x) не делится ни на один малый простой,
+            # то вероятность гладкости очень мала — пропускаем без полного деления.
+            # Это ускоряет перебор в несколько раз.
             if small_primes and not any(temp_q % p == 0 for p in small_primes):
                 x += 1
                 continue
 
+            # Пробное деление: для каждого простого p из факторной базы
+            # делим temp_q на p столько раз, сколько возможно, считая степень.
+            # exponents[i] = показатель степени factor_base[i] в разложении Q(x).
             exponents = [0] * len(factor_base)
             for i, p in enumerate(factor_base):
                 while temp_q % p == 0:
                     exponents[i] += 1
                     temp_q //= p
 
+            # Если после деления на все простые базы остаток равен 1 —
+            # Q(x) полностью разложилось по базе, т.е. является B-гладким числом.
+            # Сохраняем x, Q(x) и вектор степеней для построения матрицы.
             if temp_q == 1:
                 smooth_numbers.append({'x': x, 'q_x': q_x, 'exponents': exponents})
                 if len(smooth_numbers) <= 12:
@@ -168,8 +188,13 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
         if rows == 0 or len(matrix[0]) == 0:
             return [], 0.0
         cols = len(matrix[0])
-        # Расширяем матрицу единичной — для отслеживания комбинаций строк
-        # M = [matrix | I], где I - единичная матрица
+
+        # Строим расширенную матрицу [A | I], где:
+        #   A — исходная матрица над GF(2) (показатели степеней mod 2)
+        #   I — единичная матрица того же числа строк
+        # Правая часть I нужна для отслеживания, какие строки участвовали
+        # в каждой линейной комбинации. После приведения Гаусса правая часть
+        # нулевой строки покажет маску гладких чисел, образующих зависимость.
         M = [matrix[i] + [1 if i == j else 0 for j in range(rows)] for i in range(rows)]
 
         # Передаём срез матрицы (макс 30×30) для визуализации heatmap
@@ -191,7 +216,7 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
             sn = smooth_numbers[i]
             row_mod2 = [exp % 2 for exp in sn['exponents']]
             
-            # Разложение Q(x) для отображения
+            # Разложение Q(x) для отображения в LaTeX-формате
             factorization_parts = []
             for j, exp in enumerate(sn['exponents'][:min(6, len(sn['exponents']))]):
                 if exp > 0:
@@ -246,12 +271,21 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
         })
 
         pivot_row = 0
-        gauss_steps = []  # лог ключевых шагов исключения
+        gauss_steps = []  # лог ключевых шагов исключения для отображения в UI
 
+        # Прямой ход Гаусса: приводим матрицу к ступенчатому виду над GF(2).
+        # Обрабатываем столбцы слева направо — каждый столбец соответствует
+        # одному простому из факторной базы.
         for c in range(cols):
+            # Ищем опорную строку (pivot): первую строку начиная с pivot_row,
+            # у которой в столбце c стоит 1. Если таких нет — столбец нулевой,
+            # пропускаем (это означает, что данный простой не встречается ни в
+            # одном ещё не обработанном гладком числе).
             pivot = next((r for r in range(pivot_row, rows) if M[r][c] == 1), -1)
             if pivot == -1:
                 continue
+            # Переставляем опорную строку на позицию pivot_row,
+            # чтобы она стала "ведущей" для текущего столбца.
             if pivot != pivot_row:
                 M[pivot_row], M[pivot] = M[pivot], M[pivot_row]
                 if len(gauss_steps) < 10:
@@ -262,6 +296,11 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
                         "Комментарий": f"строка {pivot} ↔ строка {pivot_row}",
                     })
             eliminated = 0
+            # XOR-исключение: для каждой строки r (кроме опорной), где M[r][c] = 1,
+            # выполняем строка[r] = строка[r] XOR строка[pivot_row].
+            # В GF(2) это эквивалентно вычитанию — обнуляет элемент в столбце c.
+            # Операция применяется ко всей строке, включая правую часть [I],
+            # что позволяет отслеживать, какие исходные строки вошли в комбинацию.
             for r in range(rows):
                 if r != pivot_row and M[r][c] == 1:
                     M[r] = [M[r][i] ^ M[pivot_row][i] for i in range(len(M[0]))]
@@ -275,6 +314,10 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
                 })
             pivot_row += 1
 
+        # Извлекаем линейные зависимости: строки с нулевой левой частью [A|...]
+        # означают, что соответствующая комбинация гладких чисел даёт полный квадрат.
+        # Правая часть (маска из единичной матрицы) показывает, какие именно строки
+        # участвовали в этой комбинации — это и есть зависимость.
         dependencies = [M[r][cols:] for r in range(pivot_row, rows)]
 
         _gauss_ms = (time.perf_counter() - _gauss_start) * 1000
@@ -327,8 +370,10 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
         return dependencies, _gauss_ms
 
     def factorize(self, n: int, b_override: int = None) -> List[int]:
+        # Очищаем лог шагов от предыдущих запусков
         self.clear_logs()
 
+        # Граничные случаи: числа ≤ 1, чётные и простые не требуют алгоритма
         if n <= 1: return [n]
         if n % 2 == 0: return [2, n // 2]
         if is_prime(n): return [n]
@@ -344,11 +389,16 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
         })
 
         # ── Выбор границы B ──────────────────────────────────────────────────
+        # B — граница гладкости: в факторную базу войдут только простые p ≤ B.
+        # Оптимальное B по L-нотации: exp(0.5 · √(ln n · ln ln n)).
+        # Слишком малый B → мало гладких чисел, алгоритм не найдёт зависимость.
+        # Слишком большой B → большая матрица Гаусса, медленное решение СЛАУ.
         B_auto = int(math.exp(0.5 * math.sqrt(math.log(n) * math.log(math.log(n)))))
-        B_auto = max(B_auto, 100)
-        B_auto = min(B_auto, 50000)
+        B_auto = max(B_auto, 100)    # нижний порог: слишком малый B бесполезен
+        B_auto = min(B_auto, 50000)  # верхний порог: ограничиваем память и время
 
         if b_override is not None:
+            # Пользователь задал B вручную — используем его значение
             B = max(10, int(b_override))
             mode_label = "ручной (режим исследователя)"
             mode_note = (
@@ -358,6 +408,7 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
                 f"{'B > B_авто → факторная база велика, матрица Гаусса будет большой.' if B > B_auto else ''}"
             )
         else:
+            # Автоматический режим: используем оптимальное B по формуле
             B = B_auto
             mode_label = "автоматический (L-нотация)"
             mode_note = ""
@@ -394,10 +445,13 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
         })
 
         factor_base, fb_time_ms = self._get_factor_base(n, B)
+        # Нужно найти на 5 гладких чисел больше, чем размер базы:
+        # по теореме линейной алгебры, если строк > столбцов, гарантированно
+        # найдётся хотя бы одна линейная зависимость над GF(2).
         required_smooth = len(factor_base) + 5
         smooth_numbers = self._find_smooth_numbers(n, factor_base, required_smooth)
         
-        # Извлекаем sieve_time_ms из последнего шага
+        # Извлекаем sieve_time_ms из последнего шага лога (записан внутри _find_smooth_numbers)
         sieve_time_ms = self.steps_log[-1]["details"].get("sieve_time_ms", 0)
 
         if not smooth_numbers:
@@ -409,12 +463,16 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
             })
             return [n]
 
+        # Строим матрицу над GF(2): каждая строка — вектор показателей степеней
+        # одного гладкого числа Q(xᵢ), взятых по модулю 2.
+        # Чётная степень → 0 (не влияет на квадратичность), нечётная → 1.
         matrix_mod2 = [[exp % 2 for exp in sn['exponents']] for sn in smooth_numbers]
         dependencies, gauss_time_ms = self._gauss_elimination_gf2(matrix_mod2, smooth_numbers, factor_base)
 
         # ── Профилирование времени ───────────────────────────────────────────
+        # Суммируем время трёх основных этапов для отображения разбивки
         total_time_ms = fb_time_ms + sieve_time_ms + gauss_time_ms
-        other_time_ms = max(0, total_time_ms * 0.02)  # ~2% на остальное
+        other_time_ms = max(0, total_time_ms * 0.02)  # ~2% на остальное (проверка зависимостей и т.д.)
         
         self.log_step("⏱ Профилирование времени выполнения", {
             "message": (
@@ -445,23 +503,36 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
         })
 
         for idx, dep in enumerate(dependencies):
-            X = 1
-            exponents_sum = [0] * len(factor_base)
-            used_xs = []
+            # dep — бинарная маска: dep[i] = 1 означает, что i-е гладкое число
+            # участвует в данной зависимости.
+
+            X = 1               # X = ∏ xᵢ (mod n) — левая часть конгруэнции
+            exponents_sum = [0] * len(factor_base)  # суммарные показатели степеней ∏ Q(xᵢ)
+            used_xs = []        # список xᵢ для отображения в логе
 
             for i, is_used in enumerate(dep):
                 if is_used:
+                    # Накапливаем произведение xᵢ по модулю n
                     X = (X * smooth_numbers[i]['x']) % n
                     used_xs.append(smooth_numbers[i]['x'])
+                    # Суммируем показатели степеней: ∏ Q(xᵢ) = ∏ pⱼ^(∑ eᵢⱼ)
+                    # Поскольку зависимость гарантирует чётность всех ∑ eᵢⱼ,
+                    # можно взять квадратный корень: Y = ∏ pⱼ^(∑ eᵢⱼ / 2)
                     for j, exp in enumerate(smooth_numbers[i]['exponents']):
                         exponents_sum[j] += exp
 
+            # Y = √(∏ Q(xᵢ)) mod n — правая часть конгруэнции X² ≡ Y² (mod n)
             Y = 1
             for i, p in enumerate(factor_base):
+                # Делим каждый показатель на 2 (он чётный по построению зависимости)
                 Y = (Y * pow(p, exponents_sum[i] // 2, n)) % n
 
+            # Проверяем НОД(X−Y, n) и НОД(X+Y, n).
+            # Если X² ≡ Y² (mod n), то n | (X−Y)(X+Y).
+            # Нетривиальный делитель: 1 < НОД < n (т.е. X ≢ ±Y (mod n)).
             d1 = math.gcd(abs(X - Y), n)
             d2 = math.gcd(abs(X + Y), n)
+            # Выбираем нетривиальный делитель, если он есть
             d = d1 if 1 < d1 < n else (d2 if 1 < d2 < n else d1)
 
             self.log_step(f"Зависимость #{idx + 1}", {
@@ -480,6 +551,10 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
                 return sorted([d, n // d])
 
         # ── Повторная попытка с увеличенным B ───────────────────────────────
+        # Если все зависимости дали тривиальные делители (X ≡ ±Y mod n),
+        # это не ошибка алгоритма — просто не повезло с комбинациями.
+        # Увеличиваем B в 3 раза: больше гладких чисел → больше зависимостей →
+        # выше шанс найти нетривиальный делитель.
         if b_override is None and B < 50000:
             B2 = min(B * 3, 50000)
             self.log_step("Повторная попытка с B×3", {
@@ -489,7 +564,7 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
                 )
             })
             factor_base2, _ = self._get_factor_base(n, B2)
-            required2 = len(factor_base2) + 10
+            required2 = len(factor_base2) + 10  # берём чуть больше запаса для надёжности
             smooth2 = self._find_smooth_numbers(n, factor_base2, required2)
             if smooth2:
                 matrix2 = [[exp % 2 for exp in sn['exponents']] for sn in smooth2]
@@ -505,6 +580,7 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
                     Y = 1
                     for i, p in enumerate(factor_base2):
                         Y = (Y * pow(p, exponents_sum[i] // 2, n)) % n
+                    # Проверяем оба кандидата на делитель
                     for candidate in [math.gcd(abs(X - Y), n), math.gcd(abs(X + Y), n)]:
                         if 1 < candidate < n:
                             self.log_step("Факторизация завершена (повторная попытка)", {

@@ -25,9 +25,9 @@ class PollardRho(FactorizationAlgorithm):
         """Инициализация ρ-метода Полларда."""
         super().__init__()
 
-    def _rho_step(self, n: int) -> int:
+    def _rho_step(self, n: int, c: int = 1, max_iterations: int = 100000) -> int:
         """
-        Один проход ρ-метода для числа n.
+        Один проход ρ-метода для числа n с заданной константой c.
         
         Алгоритм "черепахи и зайца":
         - Черепаха делает 1 шаг: x = f(x)
@@ -36,6 +36,8 @@ class PollardRho(FactorizationAlgorithm):
         - Когда d > 1 и d < n - нашли нетривиальный делитель
 
         n (int): Число для факторизации (n > 1)
+        c (int): Константа для полинома f(x) = (x² + c) mod n
+        max_iterations (int): Максимальное число итераций
         """
         # Тривиальный случай: чётное число
         if n % 2 == 0:
@@ -46,8 +48,6 @@ class PollardRho(FactorizationAlgorithm):
         x = 2
         y = 2
         d = 1
-        # Константа для полинома f(x) = (x² + c) mod n
-        c = 1
         # Определяем функцию полинома
         # Используем pow(val, 2, n) для эффективного вычисления val² mod n
         f = lambda val: (pow(val, 2, n) + c) % n
@@ -70,10 +70,10 @@ class PollardRho(FactorizationAlgorithm):
         table_data = []
 
         # Основной цикл: продолжаем пока НОД = 1 (не нашли делитель)
-        while d == 1:
-            # Черепаха делает 1 шаг
+        while d == 1 and iteration < max_iterations:
+            # 1 шаг
             x = f(x)
-            # Заяц делает 2 шага
+            # 2 шага
             y = f(f(y))
             # Вычисляем НОД разности и n
             d = math.gcd(abs(x - y), n)
@@ -106,9 +106,15 @@ class PollardRho(FactorizationAlgorithm):
                     f"НОД = n = {n} — нашли тривиальный делитель.\n"
                     f"Это значит x ≡ y (mod n), а не только mod p — цикл замкнулся слишком рано.\n"
                     f"Причина: неудачный выбор c={c} или начальной точки x₀=2.\n"
-                    f"Примечание: в этой учебной реализации перезапуск с другим c не реализован.\n"
-                    f"В полноценном алгоритме здесь меняют c (например, c=2, c=3, ...) и повторяют."
+                    f"Требуется перезапуск с другой константой c."
                 )
+            })
+            return n
+        
+        # Проверка на превышение лимита итераций
+        if iteration >= max_iterations:
+            self.log_step("Превышен лимит итераций", {
+                "message": f"Достигнуто максимальное число итераций ({max_iterations}). Требуется перезапуск с другой константой c."
             })
             return n
 
@@ -155,11 +161,12 @@ class PollardRho(FactorizationAlgorithm):
             )
         })
 
+        # Стек заменяет рекурсию: кладём числа, которые ещё нужно разложить
+        stack = [n]
         # Обрабатываем числа из стека, пока он не опустеет
         while stack:
             # Извлекаем очередное число для проверки
             current = stack.pop()
-            
             # Если число простое — сразу добавляем в результат
             if is_prime(current):
                 factors.append(current)
@@ -167,16 +174,26 @@ class PollardRho(FactorizationAlgorithm):
                     "message": f"{current} — простое (тест Миллера–Рабина). Добавляем в результат."
                 })
                 continue
-
             self.log_step("Составное число", {
                 "message": f"{current} — составное. Запускаем ρ-шаг для поиска делителя."
             })
-
             # Ищем нетривиальный делитель через алгоритм Флойда (ρ-шаг)
-            divisor = self._rho_step(current)
+            # Пробуем разные константы c = 1, 2, 3, ... если происходит вырождение
+            divisor = current
+            for c in [1, 2, 3, 5, 7]:
+                divisor = self._rho_step(current, c=c)
+                if divisor != current:
+                    # Нашли делитель!
+                    break
+                # Вырождение - пробуем следующую константу
+                if c < 7:
+                    self.log_step("Перезапуск с новой константой", {
+                        "message": f"Пробуем c = {c+1 if c < 3 else (5 if c == 3 else 7)}"
+                    })
             
             if divisor == current:
-                # ρ-шаг не нашёл делитель — считаем число неразложимым и добавляем как есть
+                # ρ-шаг не нашёл делитель даже с разными константами
+                # считаем число неразложимым и добавляем как есть
                 factors.append(current) 
             else:
                 # Нашли делитель: разбиваем current = divisor × quotient

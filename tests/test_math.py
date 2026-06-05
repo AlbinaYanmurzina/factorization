@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import pytest
 from backend.algorithms.math_utils import is_prime, generate_primes, legendre_symbol
 

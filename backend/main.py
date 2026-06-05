@@ -39,7 +39,34 @@ ALGO_MAP = {
 
 # Таймаут выполнения факторизации в секундах
 # Предотвращает зависание на слишком больших числах
-TIMEOUT_SECONDS = 90.0
+# Значение по умолчанию для чисел без указания битности
+DEFAULT_TIMEOUT_SECONDS = 240.0
+
+def get_timeout_for_number(n: int) -> float:
+    """
+    Возвращает таймаут в секундах в зависимости от размера числа.
+    
+    Логика:
+    - До 80 бит: 120 секунд (достаточно для всех алгоритмов)
+    - 80-85 бит: 300 секунд (5 минут)
+    - 85-92 бит: 600 секунд (10 минут, Диксон может занять ~10 минут)
+    - 92-100 бит: 1200 секунд (20 минут, Диксон может занять ~20 минут)
+    - 100-110 бит: 2400 секунд (40 минут, Диксон может занять ~40 минут)
+    - 110+ бит: 3600 секунд (60 минут, Диксон может занять ~60 минут)
+    """
+    bits = n.bit_length()
+    if bits < 80:
+        return 120.0
+    elif bits < 85:
+        return 300.0
+    elif bits < 92:
+        return 600.0
+    elif bits < 100:
+        return 1200.0
+    elif bits < 110:
+        return 2400.0
+    else:
+        return 3600.0
 
 @app.post("/api/factorize", response_model=FactorizeResponse)
 async def factorize(request: FactorizeRequest):
@@ -76,6 +103,10 @@ async def factorize(request: FactorizeRequest):
 
     # Создание экземпляра алгоритма
     algo = algo_cls()
+    
+    # Определяем таймаут в зависимости от размера числа
+    timeout_seconds = get_timeout_for_number(n)
+    
     start_time = time.perf_counter()
 
     try:
@@ -86,7 +117,7 @@ async def factorize(request: FactorizeRequest):
 
         raw_factors = await asyncio.wait_for(
             asyncio.to_thread(algo.factorize, n, **kwargs),
-            timeout=TIMEOUT_SECONDS
+            timeout=timeout_seconds
         )
 
         # Конвертация множителей в строки для поддержки больших чисел
@@ -98,10 +129,10 @@ async def factorize(request: FactorizeRequest):
         execution_time = (time.perf_counter() - start_time) * 1000
     except asyncio.TimeoutError:
         # Обработка таймаута: возвращаем исходное число и сообщение об ошибке
-        execution_time = TIMEOUT_SECONDS * 1000
+        execution_time = timeout_seconds * 1000
         factors = [str(n)]
         steps = [{"step": "Тайм-аут", "details": {
-            "message": f"Превышено время ожидания ({int(TIMEOUT_SECONDS)}с). Алгоритм не справился с числом данной разрядности."
+            "message": f"Превышено время ожидания ({int(timeout_seconds)}с). Алгоритм не справился с числом данной разрядности."
         }}]
     except Exception as e:
         # Обработка других исключений

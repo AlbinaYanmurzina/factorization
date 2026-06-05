@@ -604,7 +604,7 @@ with st.container(border=True):
         gen_bits = st.slider(
             "Битность числа:",
             min_value=10,
-            max_value=200,
+            max_value=120,
             value=16,
             step=1,
             key="gen_bits_slider",
@@ -805,13 +805,25 @@ if queued_all:
             st.write(f"▶ {algo_label.split(' (')[0]}...")
             try:
                 payload = {"number": all_number, "algorithm": algo_key}
-                resp = requests.post("http://127.0.0.1:8453/api/factorize", json=payload)
+                resp = requests.post("http://127.0.0.1:8453/api/factorize", json=payload, timeout=125)
                 if resp.status_code == 200:
                     d = resp.json()
                     factors_str = " × ".join(d["factors"])
+                    
+                    # Проверка на неудачную факторизацию
+                    factorization_failed = (len(d["factors"]) == 1 and d["factors"][0] == all_number)
+                    is_timeout = d["time_ms"] >= 120000
+                    
+                    if factorization_failed:
+                        result_status = "не справился"
+                    elif is_timeout:
+                        result_status = "таймаут"
+                    else:
+                        result_status = factors_str
+                    
                     all_results.append({
                         "Алгоритм": algo_label.split(" (")[0],
-                        "Результат": factors_str,
+                        "Результат": result_status,
                         "Время, мс": round(d["time_ms"], 3),
                         "Шагов": len(d["steps"]),
                     })
@@ -821,7 +833,7 @@ if queued_all:
                         "Бит": len(bin(int(all_number))) - 2,
                         "Алгоритм": algo_label.split(" (")[0],
                         "B": "авто",
-                        "Результат": factors_str,
+                        "Результат": result_status,
                         "Время, мс": round(d["time_ms"], 3),
                         "Шагов": len(d["steps"]),
                     })
@@ -843,6 +855,13 @@ if queued_all:
                 all_status.update(label="Нет соединения с сервером", state="error", expanded=True)
                 st.error("Не удалось подключиться к серверу.")
                 st.stop()
+            except requests.exceptions.Timeout:
+                all_results.append({
+                    "Алгоритм": algo_label.split(" (")[0],
+                    "Результат": "таймаут (>125 сек)",
+                    "Время, мс": ">125000",
+                    "Шагов": "-",
+                })
 
         all_status.update(label=f"Все алгоритмы выполнены для n = {all_number}", state="complete", expanded=False)
 
@@ -880,7 +899,7 @@ if run_number and run_algo:
             payload = {"number": run_number, "algorithm": algo_key}
             if effective_b is not None:
                 payload["b_override"] = effective_b
-            response = requests.post("http://127.0.0.1:8453/api/factorize", json=payload)
+            response = requests.post("http://127.0.0.1:8453/api/factorize", json=payload, timeout=125)
             if response.status_code == 200:
                 data = response.json()
                 st.write(f"Получен ответ. Шагов: {len(data['steps'])}")
@@ -893,9 +912,29 @@ if run_number and run_algo:
             status.update(label="Нет соединения с сервером", state="error", expanded=True)
             st.error("Не удалось подключиться к серверу. Убедитесь, что FastAPI (backend) запущен.")
             st.stop()
+        except requests.exceptions.Timeout:
+            status.update(label="Таймаут (>125 сек)", state="error", expanded=True)
+            st.error("Запрос превысил лимит времени (125 секунд). Попробуйте меньшее число.")
+            st.stop()
 
     factors_str = " × ".join(data["factors"])
-    st.success(f"**{run_number} = {factors_str}**  |  время: {data['time_ms']:.3f} мс")
+    
+    # Проверка на неудачную факторизацию
+    # Если вернулось 1 число и оно равно исходному - факторизация не удалась
+    factorization_failed = (len(data["factors"]) == 1 and data["factors"][0] == run_number)
+    
+    # Проверка на таймаут (120 секунд = 120000 мс)
+    is_timeout = data["time_ms"] >= 120000
+    
+    if factorization_failed:
+        st.error(f"**Факторизация не удалась**  |  Алгоритм вернул исходное число: {run_number}  |  время: {data['time_ms']:.3f} мс")
+        result_status = "не справился"
+    elif is_timeout:
+        st.warning(f"**Таймаут (120 сек)**  |  Результат: {factors_str}  |  время: {data['time_ms']:.3f} мс")
+        result_status = "таймаут"
+    else:
+        st.success(f"**{run_number} = {factors_str}**  |  время: {data['time_ms']:.3f} мс")
+        result_status = factors_str
 
     # Сохраняем в историю
     b_label = str(effective_b) if effective_b is not None else "авто"
@@ -904,7 +943,7 @@ if run_number and run_algo:
         "Бит": len(bin(int(run_number))) - 2,
         "Алгоритм": run_algo.split(" (")[0],
         "B": b_label,
-        "Результат": factors_str,
+        "Результат": result_status,
         "Время, мс": round(data["time_ms"], 3),
         "Шагов": len(data["steps"]),
     })

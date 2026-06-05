@@ -102,14 +102,22 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
         x_start = math.isqrt(n) + 1
         x = x_start
         table_data = []
-        # Масштабируем лимит поиска под размер числа, чтобы не зависнуть на больших n
-        max_search = max(500_000, required_count * 5000)
+        # Масштабируем лимит поиска под размер числа
+        # Для больших чисел увеличиваем лимит поиска
+        bit_length = n.bit_length()
+        if bit_length <= 40:
+            max_search = max(500_000, required_count * 5000)
+        elif bit_length <= 60:
+            max_search = max(1_000_000, required_count * 10000)
+        elif bit_length <= 80:
+            max_search = max(2_000_000, required_count * 20000)
+        else:
+            max_search = max(5_000_000, required_count * 50000)
+        
         checked = 0
-        # Множество простых из базы для быстрой проверки делимости (не используется напрямую,
-        # но может пригодиться при расширении логики)
+        # Множество простых из базы для быстрой проверки делимости
         fb_set = set(factor_base)
-        # Берём только малые простые (≤ 13) для быстрого предфильтра:
-        # если Q(x) не делится ни на одно из них — скорее всего не гладкое, пропускаем
+        # Берём только малые простые (≤ 13) для быстрого предфильтра
         small_primes = [p for p in factor_base if p <= 13]
 
         self.log_step("Этап 2: Поиск B-гладких чисел (пробное деление)", {
@@ -119,46 +127,51 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
                 f"Q(x) мало по модулю (≈ 2x·Δ), поэтому шансы на гладкость высоки.\n"
                 f"Число B-гладкое, если после деления на все p из базы остаток = 1.\n"
                 f"Нужно найти: {required_count} гладких чисел (|FB| + 5).\n"
-                f"Начинаем с x = {x_start}"
+                f"Начинаем с x = {x_start}, лимит поиска: {max_search}"
             )
         })
 
         _sieve_start = time.perf_counter()
+        # Логируем прогресс каждые 10%
+        log_interval = max_search // 10
+        last_log = 0
+        
         while len(smooth_numbers) < required_count and (x - x_start) < max_search:
-            # Вычисляем Q(x) = x² − n. Это число мало относительно n,
-            # поэтому у него высокие шансы разложиться по факторной базе.
+            # Вычисляем Q(x) = x² − n
             q_x = x * x - n
-            temp_q = q_x  # рабочая копия — будем делить на простые из базы
+            temp_q = q_x
             checked += 1
 
-            # Быстрый предфильтр: если Q(x) не делится ни на один малый простой,
-            # то вероятность гладкости очень мала — пропускаем без полного деления.
-            # Это ускоряет перебор в несколько раз.
+            # Быстрый предфильтр
             if small_primes and not any(temp_q % p == 0 for p in small_primes):
                 x += 1
                 continue
 
-            # Пробное деление: для каждого простого p из факторной базы
-            # делим temp_q на p столько раз, сколько возможно, считая степень.
-            # exponents[i] = показатель степени factor_base[i] в разложении Q(x).
+            # Пробное деление
             exponents = [0] * len(factor_base)
             for i, p in enumerate(factor_base):
                 while temp_q % p == 0:
                     exponents[i] += 1
                     temp_q //= p
 
-            # Если после деления на все простые базы остаток равен 1 —
-            # Q(x) полностью разложилось по базе, т.е. является B-гладким числом.
-            # Сохраняем x, Q(x) и вектор степеней для построения матрицы.
+            # Если B-гладкое
             if temp_q == 1:
                 smooth_numbers.append({'x': x, 'q_x': q_x, 'exponents': exponents})
+                # Логируем только первые 12 для экономии времени
                 if len(smooth_numbers) <= 12:
                     table_data.append({
                         "x": str(x),
                         "Q(x) = x²−n": str(q_x),
-                        "Вектор степеней": str(exponents),
+                        "Вектор степеней": str(exponents[:8]) + ("..." if len(exponents) > 8 else ""),
                         "Гладкое?": "✓"
                     })
+            
+            # Логируем прогресс
+            if checked - last_log >= log_interval:
+                progress = (checked / max_search) * 100
+                found_rate = (len(smooth_numbers) / checked) * 100 if checked > 0 else 0
+                print(f"  Прогресс: {progress:.0f}% | Проверено: {checked} | Найдено: {len(smooth_numbers)} ({found_rate:.2f}%)")
+                last_log = checked
 
             x += 1
 
@@ -167,12 +180,15 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
             "message": (
                 f"Просмотрено значений x: {checked}\n"
                 f"Найдено B-гладких чисел: {len(smooth_numbers)} / {required_count}\n"
-                f"Время поиска гладких чисел: {_sieve_ms:.3f} мс\n"
+                f"Время поиска гладких чисел: {_sieve_ms:.3f} мс ({_sieve_ms/1000:.1f} сек)\n"
                 f"Каждая строка таблицы — это соотношение x² ≡ Q(x) (mod n),\n"
                 f"где Q(x) полностью раскладывается по факторной базе."
             ),
-            "table": table_data,
+            "table": table_data if table_data else None,
             "sieve_time_ms": round(_sieve_ms, 3),
+            "checked": checked,
+            "smooth_found": len(smooth_numbers),
+            "required_smooth": required_count,
         })
         return smooth_numbers
 
@@ -375,7 +391,14 @@ class QuadraticSieveBasic(FactorizationAlgorithm):
 
         # Граничные случаи: числа ≤ 1, чётные и простые не требуют алгоритма
         if n <= 1: return [n]
-        if n % 2 == 0: return [2, n // 2]
+        if n == 2: return [2]
+        
+        # Рекурсивная обработка чётных чисел
+        if n % 2 == 0:
+            # Факторизуем n//2 рекурсивно
+            remaining_factors = self.factorize(n // 2, b_override)
+            return sorted([2] + remaining_factors)
+        
         if is_prime(n): return [n]
 
         self.log_step("Запуск: Квадратичное решето (базовый)", {
